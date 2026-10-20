@@ -1,4 +1,5 @@
 // Types et libellés du flux vrac (voir api/src/vrac).
+import type { CategorieHuile, Ecart, StatutQualite } from "./qualite";
 import type { Role } from "./roles";
 
 /** Rôles qui peuvent enregistrer des mouvements de stock (mêmes droits que l'API). */
@@ -23,7 +24,13 @@ export interface Analyse {
   k270: string | null;
   deltaK: string | null;
   polyphenols: number | null;
+  esterEthyliques: string | null;
+  medianeDefaut: string | null;
+  medianeFruite: string | null;
   commentaire: string | null;
+  categorie: CategorieHuile | null;
+  resultat: StatutQualite | null;
+  ecarts: Ecart[] | null;
 }
 
 export interface Lot {
@@ -37,6 +44,9 @@ export interface Lot {
   quantiteInitialeKg: number;
   numeroBon: string | null;
   notes: string | null;
+  categorieVisee: CategorieHuile;
+  statutQualite: StatutQualite;
+  bloque: boolean;
   stockKg: number;
   derniereAnalyse: Analyse | null;
 }

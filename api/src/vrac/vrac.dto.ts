@@ -4,48 +4,17 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   Matches,
-  Max,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { MotifSortie, StatutLivraison } from '../generated/prisma/enums.js';
+import { CategorieHuile, MotifSortie, StatutLivraison } from '../generated/prisma/enums.js';
+import { AnalyseDto } from '../qualite/qualite.dto.js';
 
-export class AnalyseDto {
-  @IsDateString()
-  dateAnalyse: string;
-
-  @IsOptional() @IsString() @MaxLength(160)
-  laboratoire?: string;
-
-  @IsOptional() @IsString() @MaxLength(64)
-  reference?: string;
-
-  @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100)
-  acidite?: number;
-
-  @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(1000)
-  peroxyde?: number;
-
-  @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) @Max(10)
-  k232?: number;
-
-  @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) @Max(10)
-  k270?: number;
-
-  @IsOptional() @IsNumber({ maxDecimalPlaces: 3 }) @Min(-1) @Max(1)
-  deltaK?: number;
-
-  @IsOptional() @IsInt() @Min(0)
-  polyphenols?: number;
-
-  @IsOptional() @IsString()
-  commentaire?: string;
-}
+export { AnalyseDto };
 
 /** Une part d'une quantité dans une cuve. */
 export class RepartitionDto {
@@ -78,6 +47,10 @@ export class ReceptionDto {
 
   @IsOptional() @IsString()
   notes?: string;
+
+  /** Qualité attendue du lot (extra vierge par défaut), contrôlée à chaque analyse. */
+  @IsOptional() @IsEnum(CategorieHuile)
+  categorieVisee?: CategorieHuile;
 
   /** Une réception peut remplir plusieurs cuves (ex. 40 t dans deux cuves de 24 t). */
   @ValidateNested({ each: true }) @Type(() => RepartitionDto) @ArrayMinSize(1)
@@ -127,6 +100,10 @@ export class AssemblageDto {
 
   @IsInt()
   destinationId: number;
+
+  /** Par défaut, la moins bonne catégorie visée des lots d'origine. */
+  @IsOptional() @IsEnum(CategorieHuile)
+  categorieVisee?: CategorieHuile;
 
   @IsOptional() @IsDateString()
   date?: string;

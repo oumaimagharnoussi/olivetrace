@@ -14,6 +14,9 @@ const CHAMPS = [
   { name: "k270", label: "K270", type: "number", step: "0.001" },
   { name: "deltaK", label: "ΔK", type: "number", step: "0.001" },
   { name: "polyphenols", label: "Polyphénols (mg/kg)", type: "number", step: "1" },
+  { name: "esterEthyliques", label: "Esters éthyliques (mg/kg)", type: "number", step: "0.1" },
+  { name: "medianeDefaut", label: "Dégustation : médiane du défaut", type: "number", step: "0.1" },
+  { name: "medianeFruite", label: "Dégustation : médiane du fruité", type: "number", step: "0.1" },
   { name: "commentaire", label: "Commentaire", type: "text" },
 ] as const;
 

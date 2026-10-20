@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import type { ControleExpedition } from "@/lib/qualite";
 import { useApi } from "@/lib/useApi";
 import { type Cuve, type MotifSortie, MOTIFS_SORTIE, aujourdhui, dateOperation, kg } from "@/lib/vrac";
 import { Champ, Erreur } from "./ui";
@@ -304,6 +305,12 @@ export function FormulaireSortie({ cuves, onAnnuler, onFin }: Props) {
   const { erreur, envoi, envoyer } = useEnvoi();
   const source = cuves.find((c) => c.id === Number(v.stockageId));
   const vente = v.motif === "VENTE";
+  // Contrôle qualité avant une vente (avec le cahier des charges du client) ou un envoi au conditionnement.
+  const aControler = source?.lot && (v.motif === "CONDITIONNEMENT" || (vente && v.clientId));
+  const controle = useApi<ControleExpedition>(
+    aControler ? `/qualite/controle-expedition?lotId=${source!.lot!.id}${vente ? `&clientId=${v.clientId}` : ""}` : null,
+  );
+  const controleAJour = aControler ? controle.data : null;
 
   return (
     <form
@@ -423,8 +430,24 @@ export function FormulaireSortie({ cuves, onAnnuler, onFin }: Props) {
         </div>
       )}
 
+      {controleAJour && (controleAJour.blocages.length > 0 || controleAJour.avertissements.length > 0) && (
+        <div
+          className={`space-y-1 rounded-md border p-4 text-sm ${controleAJour.autorise ? "border-amber-200 bg-amber-50 text-amber-900" : "border-red-200 bg-red-50 text-red-800"}`}
+        >
+          <div className="font-medium">{controleAJour.autorise ? "Contrôle qualité : à vérifier" : "Contrôle qualité : sortie impossible"}</div>
+          <ul className="list-disc space-y-1 pl-5">
+            {[...controleAJour.blocages, ...controleAJour.avertissements].map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {controleAJour?.autorise && controleAJour.avertissements.length === 0 && (
+        <p className="text-sm text-olive-800">Contrôle qualité : lot conforme.</p>
+      )}
+
       <Erreur message={erreur} />
-      <Boutons envoi={envoi} libelle="Enregistrer la sortie" onAnnuler={onAnnuler} />
+      <Boutons envoi={envoi} libelle="Enregistrer la sortie" onAnnuler={onAnnuler} desactive={controleAJour?.autorise === false} />
     </form>
   );
 }

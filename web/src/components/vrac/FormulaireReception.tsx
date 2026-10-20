@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { CATEGORIES } from "@/lib/qualite";
 import { useApi } from "@/lib/useApi";
 import { type Cuve, type Ref, aujourdhui, campagneEnCours, kg } from "@/lib/vrac";
 import { ChampsAnalyse, analyseVersApi, analyseVide } from "./ChampsAnalyse";
 import { Champ, Erreur } from "./ui";
 
 /** Réception d'huile d'une huilerie : nouveau lot réparti dans une ou plusieurs cuves vides. */
-export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: () => void; onEnregistre: () => void }) {
+export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: () => void; onEnregistre: (message: string) => void }) {
   const huileries = useApi<Ref[]>("/huileries");
   const varietes = useApi<Ref[]>("/varietes");
   const cuves = useApi<Cuve[]>("/stock");
@@ -21,6 +22,7 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
     dateReception: aujourdhui(),
     numeroBon: "",
     notes: "",
+    categorieVisee: "EXTRA_VIERGE",
   });
   const [repartition, setRepartition] = useState([{ stockageId: "", quantiteKg: "" }]);
   const [avecAnalyse, setAvecAnalyse] = useState(false);
@@ -35,7 +37,7 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
     setEnvoi(true);
     setErreur(null);
     try {
-      await api("/lots/reception", {
+      const res = await api<{ code: string; nonConformite: { code: string; description: string } | null }>("/lots/reception", {
         method: "POST",
         body: {
           code: lot.code || undefined,
@@ -45,11 +47,16 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
           dateReception: lot.dateReception,
           numeroBon: lot.numeroBon || undefined,
           notes: lot.notes || undefined,
+          categorieVisee: lot.categorieVisee,
           repartition: repartition.map((r) => ({ stockageId: Number(r.stockageId), quantiteKg: Number(r.quantiteKg) })),
           analyse: avecAnalyse ? analyseVersApi(analyse) : undefined,
         },
       });
-      onEnregistre();
+      onEnregistre(
+        res.nonConformite
+          ? `Lot ${res.code} reçu mais bloqué : ${res.nonConformite.description} (non-conformité ${res.nonConformite.code}).`
+          : `Lot ${res.code} enregistré.`,
+      );
     } catch (e) {
       setErreur((e as Error).message);
     } finally {
@@ -95,6 +102,15 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
         </Champ>
         <Champ label="Code du lot">
           <input className="input" placeholder="Généré automatiquement" value={lot.code} onChange={maj("code")} />
+        </Champ>
+        <Champ label="Catégorie visée" requis>
+          <select className="input" value={lot.categorieVisee} onChange={maj("categorieVisee")}>
+            {Object.entries(CATEGORIES).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
         </Champ>
       </div>
 
