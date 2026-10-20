@@ -39,6 +39,16 @@ npm run start:dev
 
 `prisma migrate dev` crée les tables, `prisma db seed` ajoute le compte administrateur et quelques exemples. Sous macOS ou Linux, remplacer `copy` par `cp`.
 
+Après avoir récupéré une nouvelle version du code (`git pull`), dans `api` :
+
+```bash
+npm install
+npx prisma migrate dev
+npx prisma generate
+```
+
+`migrate dev` applique les nouvelles tables à la base, `generate` met à jour le client Prisma utilisé par le code.
+
 ### 3. Frontend (http://localhost:3000)
 
 Dans un second terminal :
@@ -58,6 +68,11 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/` : accueil avec le nombre de référentiels actifs
 - `/referentiels/huileries`, `/referentiels/varietes`, `/referentiels/stockages`, `/referentiels/clients` : liste, ajout, modification, désactivation
 - `/utilisateurs` : gestion des comptes (administrateur seulement)
+- `/stock` : état des cuves et citernes (lot contenu, remplissage, ancienneté) et alertes
+- `/lots` : liste des lots et saisie d'une réception (huilerie, variété, date, quantité, mise en cuve, analyse de laboratoire)
+- `/lots/{id}` : fiche d'un lot (cuves, analyses, généalogie des assemblages, mouvements)
+- `/operations` : transferts, assemblages (avec contrôle avant validation), sorties de stock et journal des opérations
+- `/livraisons` : suivi des transports sous-traités (planifiée, en cours, livrée)
 
 Les boutons d'ajout et de modification n'apparaissent que pour les rôles autorisés à écrire (les mêmes que dans l'API). Les écrans sont décrits dans `web/src/lib/ressources.ts`.
 
@@ -68,6 +83,21 @@ Les boutons d'ajout et de modification n'apparaissent que pour les rôles autori
 - Utilisateurs (ADMIN) : `/api/users`
 - Référentiels : `/api/huileries`, `/api/varietes`, `/api/stockages` (cuves 24 t, citernes 30 t), `/api/clients`
 - Journal d'audit de chaque modification : `/api/audit`
+- Flux vrac (étape 2) :
+  - `GET /api/stock` (état des cuves), `GET /api/stock/alertes`
+  - `GET /api/lots`, `GET /api/lots/:id`, `POST /api/lots/reception`, `POST /api/lots/:id/analyses`
+  - `GET /api/operations`, `POST /api/operations/transfert`, `POST /api/operations/assemblage/simulation`, `POST /api/operations/assemblage`, `POST /api/operations/sortie`
+  - `GET /api/livraisons`, `PATCH /api/livraisons/:id`
 - Santé : `GET /api/health`
 
 Le schéma de données est dans `api/prisma/schema.prisma`.
+
+## Règles du flux vrac
+
+- Les quantités sont en kilogrammes. Le stock n'est jamais saisi à la main : c'est la somme des mouvements (réception, transfert, assemblage, sortie) par lot et par cuve.
+- Une cuve ou citerne contient un seul lot à la fois et ne peut pas dépasser sa capacité. Une réception peut remplir plusieurs cuves.
+- Mettre deux lots ensemble est un assemblage : il crée un nouveau lot relié à ses lots d'origine, ce qui permet de remonter jusqu'aux huileries. La cuve de l'assemblage doit être vide, ou se vider entièrement dans l'assemblage.
+- Avant de confirmer un assemblage, l'application affiche l'acidité estimée (moyenne pondérée des dernières analyses) et des avertissements : variétés ou campagnes différentes, lots sans analyse, mélange avec une huile au-dessus de 0,8 % d'acidité.
+- Alertes : lot stocké depuis plus de `ALERTE_DUREE_STOCKAGE_JOURS` jours (180 par défaut, dans `api/.env`), lot en stock sans analyse.
+- Une sortie de type vente demande un client et peut avoir un transport sous-traité (transporteur, camion, chauffeur, bon de livraison), suivi dans `/livraisons`.
+- Il faut au moins une huilerie dans les référentiels pour saisir une réception.

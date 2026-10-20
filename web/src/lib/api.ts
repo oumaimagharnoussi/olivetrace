@@ -29,7 +29,7 @@ export async function api<T = unknown>(path: string, options: { method?: string;
   });
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (!res.ok) {
-    const message = Array.isArray(data?.message) ? data.message.join(", ") : data?.message;
+    const message = Array.isArray(data?.message) ? data.message.join("\n") : data?.message;
     throw new ApiError(res.status, message ?? `Erreur ${res.status}`);
   }
   return data as T;

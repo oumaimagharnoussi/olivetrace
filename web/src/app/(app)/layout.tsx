@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { ROLE_LABELS, useAuth } from "@/lib/auth";
 import { REFERENTIELS } from "@/lib/ressources";
 
@@ -10,7 +10,6 @@ import { REFERENTIELS } from "@/lib/ressources";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -22,6 +21,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const liens = [
     { href: "/", label: "Accueil" },
+    { href: "/stock", label: "Stock en cuves" },
+    { href: "/lots", label: "Lots" },
+    { href: "/operations", label: "Opérations" },
+    { href: "/livraisons", label: "Livraisons" },
     ...Object.entries(REFERENTIELS).map(([type, r]) => ({ href: `/referentiels/${type}`, label: r.titre })),
     ...(user.role === "ADMIN" ? [{ href: "/utilisateurs", label: "Utilisateurs" }] : []),
   ];
@@ -30,20 +33,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="border-b border-olive-900 bg-olive-900 text-olive-50 md:w-60 md:shrink-0 md:border-b-0">
         <div className="px-5 py-4 text-lg font-semibold">OliveTrace</div>
-        <nav className="flex flex-wrap gap-1 px-3 pb-3 md:flex-col">
-          {liens.map((l) => {
-            const actif = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`rounded-md px-3 py-2 text-sm ${actif ? "bg-olive-700 text-white" : "text-olive-100 hover:bg-olive-800"}`}
-              >
-                {l.label}
-              </Link>
-            );
-          })}
-        </nav>
+        {/* Le menu lit l'adresse de la page : dans un <Suspense> pour les pages à paramètre (ex. /lots/12). */}
+        <Suspense>
+          <Navigation liens={liens} />
+        </Suspense>
       </aside>
       <div className="flex flex-1 flex-col">
         <header className="flex items-center justify-end gap-4 border-b border-stone-200 bg-white px-6 py-3 text-sm">
@@ -63,5 +56,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
+  );
+}
+
+function Navigation({ liens }: { liens: { href: string; label: string }[] }) {
+  const pathname = usePathname();
+  return (
+    <nav className="flex flex-wrap gap-1 px-3 pb-3 md:flex-col">
+      {liens.map((l) => {
+        const actif = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
+        return (
+          <Link
+            key={l.href}
+            href={l.href}
+            className={`rounded-md px-3 py-2 text-sm ${actif ? "bg-olive-700 text-white" : "text-olive-100 hover:bg-olive-800"}`}
+          >
+            {l.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

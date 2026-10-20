@@ -56,7 +56,7 @@ export class LotsService {
         origines: { include: { parent: { select: { id: true, code: true } } } },
         enfants: { include: { lot: { select: { id: true, code: true, dateReception: true } } } },
         mouvements: {
-          orderBy: { operation: { date: 'desc' } },
+          orderBy: [{ operation: { date: 'desc' } }, { id: 'desc' }],
           include: {
             stockage: { select: { id: true, code: true } },
             operation: { include: { client: { select: { id: true, raisonSociale: true } }, livraison: true } },
