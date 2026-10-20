@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AuthCard, Champ } from "@/components/AuthCard";
 import { useAuth } from "@/lib/auth";
 
 export default function LoginPage() {
@@ -30,37 +31,28 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-olive-50 px-4">
-      <form onSubmit={soumettre} className="w-full max-w-sm space-y-5 rounded-xl border border-stone-200 bg-white p-8 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-semibold text-olive-800">OliveTrace</h1>
-          <p className="text-sm text-stone-500">Traçabilité de l&apos;huile d&apos;olive OLIVED</p>
-        </div>
-        <div>
-          <label htmlFor="email" className="mb-1 block text-sm text-stone-700">
-            Email
-          </label>
-          <input id="email" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} className="input" />
-        </div>
-        <div>
-          <label htmlFor="password" className="mb-1 block text-sm text-stone-700">
-            Mot de passe
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="input"
-          />
-        </div>
-        {erreur && <p className="text-sm text-red-700">{erreur}</p>}
-        <button type="submit" disabled={envoi} className="btn-primary w-full">
-          {envoi ? "Connexion…" : "Se connecter"}
-        </button>
-      </form>
-    </main>
+    <AuthCard
+      titre="Traçabilité de l'huile d'olive OLIVED"
+      onSubmit={soumettre}
+      liens={[
+        { href: "/register", label: "Créer un compte" },
+        { href: "/forgot-password", label: "Mot de passe oublié ?" },
+      ]}
+    >
+      <Champ id="email" label="Email" type="email" required autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Champ
+        id="password"
+        label="Mot de passe"
+        type="password"
+        required
+        autoComplete="current-password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      {erreur && <p className="text-sm text-red-700">{erreur}</p>}
+      <button type="submit" disabled={envoi} className="btn-primary w-full">
+        {envoi ? "Connexion…" : "Se connecter"}
+      </button>
+    </AuthCard>
   );
 }

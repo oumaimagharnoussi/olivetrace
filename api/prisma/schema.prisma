@@ -31,13 +31,27 @@ model User {
   email        String   @unique @db.VarChar(191)
   passwordHash String
   nom          String   @db.VarChar(120)
-  role         Role
+  role         Role? // vide pour une inscription en attente : l'administrateur attribue le rôle
   actif        Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  auditLogs  AuditLog[]
-  operations Operation[]
+  auditLogs   AuditLog[]
+  operations  Operation[]
+  resetTokens PasswordResetToken[]
+}
+
+// Lien de réinitialisation du mot de passe : seul le hash SHA-256 du jeton est stocké.
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique @db.Char(64)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Huilerie {

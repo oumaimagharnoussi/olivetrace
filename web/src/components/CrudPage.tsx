@@ -47,7 +47,9 @@ export function CrudPage({ ressource }: { ressource: Ressource }) {
     }
   }
 
-  const visibles = items.filter((i) => inactifs || i.actif);
+  // Une inscription en attente (compte sans rôle) reste visible pour être validée.
+  const enAttente = (i: Item) => !i.actif && "role" in i && i.role === null;
+  const visibles = items.filter((i) => inactifs || i.actif || enAttente(i));
   const colonnes = ressource.champs.filter((c) => c.colonne);
 
   return (
@@ -121,20 +123,26 @@ export function CrudPage({ ressource }: { ressource: Ressource }) {
                   <td className="px-4 py-2">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs ${
-                        item.actif ? "bg-olive-100 text-olive-800" : "bg-stone-100 text-stone-500"
+                        item.actif
+                          ? "bg-olive-100 text-olive-800"
+                          : enAttente(item)
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-stone-100 text-stone-500"
                       }`}
                     >
-                      {item.actif ? "Actif" : "Désactivé"}
+                      {item.actif ? "Actif" : enAttente(item) ? "En attente" : "Désactivé"}
                     </span>
                   </td>
                   {peutEcrire && (
                     <td className="space-x-3 whitespace-nowrap px-4 py-2 text-right">
                       <button onClick={() => setEdition(item)} className="text-olive-700 hover:underline">
-                        Modifier
+                        {enAttente(item) ? "Valider" : "Modifier"}
                       </button>
-                      <button onClick={() => basculerActif(item)} className="text-stone-500 hover:underline">
-                        {item.actif ? "Désactiver" : "Réactiver"}
-                      </button>
+                      {!enAttente(item) && (
+                        <button onClick={() => basculerActif(item)} className="text-stone-500 hover:underline">
+                          {item.actif ? "Désactiver" : "Réactiver"}
+                        </button>
+                      )}
                     </td>
                   )}
                 </tr>
@@ -168,7 +176,7 @@ function Formulaire({
 }) {
   const [valeurs, setValeurs] = useState<Valeurs>(() =>
     Object.fromEntries(
-      ressource.champs.map((c) => [c.name, item?.[c.name] == null ? "" : String(item[c.name])]),
+      ressource.champs.map((c) => [c.name, item ? (item[c.name] == null ? "" : String(item[c.name])) : (c.defaut ?? "")]),
     ),
   );
   const [erreur, setErreur] = useState<string | null>(null);
@@ -182,6 +190,10 @@ function Formulaire({
     const body: Record<string, unknown> = {};
     for (const c of ressource.champs) {
       const v = valeurs[c.name].trim();
+      if (c.type === "checkbox") {
+        body[c.name] = v === "true";
+        continue;
+      }
       if (v === "") continue;
       body[c.name] = c.type === "number" ? Number(v) : v;
     }
@@ -221,7 +233,15 @@ function Formulaire({
                 {c.label}
                 {requis && <span className="text-red-600"> *</span>}
               </label>
-              {c.type === "select" ? (
+              {c.type === "checkbox" ? (
+                <input
+                  id={c.name}
+                  type="checkbox"
+                  checked={valeurs[c.name] === "true"}
+                  onChange={(e) => setValeurs((v) => ({ ...v, [c.name]: String(e.target.checked) }))}
+                  className="h-4 w-4"
+                />
+              ) : c.type === "select" ? (
                 <select {...props}>
                   <option value="">Choisir…</option>
                   {c.options?.map((o) => (

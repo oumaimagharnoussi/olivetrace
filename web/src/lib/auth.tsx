@@ -22,7 +22,11 @@ interface AuthContextValue {
   can: (roles: Role[]) => boolean;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+// Un seul contexte pour toute l'application, même si le module est chargé deux fois
+// (rechargement à chaud de `next dev`, chemins de dossier avec des casses différentes sous Windows) :
+// sinon le fournisseur et les pages utiliseraient deux contextes distincts.
+const globalAuth = globalThis as typeof globalThis & { __olivetraceAuthContext?: React.Context<AuthContextValue | null> };
+const AuthContext = (globalAuth.__olivetraceAuthContext ??= createContext<AuthContextValue | null>(null));
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
