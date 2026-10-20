@@ -1,5 +1,6 @@
-// OliveTrace : schéma de données, étape 1 (socle).
-// Utilisateurs et rôles, référentiels (huileries, variétés, cuves/citernes, clients), journal d'audit.
+// OliveTrace : schéma de données.
+// Étape 1 (socle) : utilisateurs et rôles, référentiels (huileries, variétés, cuves/citernes, clients), journal d'audit.
+// Étape 2 (flux vrac) : lots, analyses, opérations de stock (réception, transfert, assemblage, sortie), livraisons.
 
 generator client {
   provider     = "prisma-client"
@@ -35,7 +36,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  auditLogs AuditLog[]
+  auditLogs  AuditLog[]
+  operations Operation[]
 }
 
 model Huilerie {
@@ -49,6 +51,8 @@ model Huilerie {
   actif     Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  lots Lot[]
 }
 
 model Variete {
@@ -59,6 +63,8 @@ model Variete {
   actif       Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  lots Lot[]
 }
 
 model Stockage {
@@ -70,6 +76,8 @@ model Stockage {
   actif       Boolean      @default(true)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  mouvements Mouvement[]
 }
 
 model Client {
@@ -85,6 +93,8 @@ model Client {
   actif         Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  operations Operation[]
 }
 
 // Journal de toutes les modifications : base de la traçabilité et de l'option blockchain.
@@ -100,4 +110,150 @@ model AuditLog {
 
   @@index([entite, entiteId])
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Étape 2 : flux vrac
+// ---------------------------------------------------------------------------
+// Règles :
+// - le stock n'est jamais saisi directement : il est la somme des mouvements (+ entrée, - sortie) par lot et par cuve ;
+// - une cuve ou citerne ne contient qu'un seul lot à la fois ; mettre deux lots ensemble est un assemblage,
+//   qui crée un nouveau lot relié à ses lots d'origine (généalogie) ;
+// - les quantités sont en kilogrammes, comme la capacité des cuves.
+
+enum OrigineLot {
+  RECEPTION // huile reçue d'une huilerie
+  ASSEMBLAGE // mélange de plusieurs lots
+}
+
+enum TypeOperation {
+  RECEPTION
+  TRANSFERT
+  ASSEMBLAGE
+  SORTIE
+}
+
+enum MotifSortie {
+  VENTE // vente en vrac à un client
+  CONDITIONNEMENT // envoi vers la filtration / mise en bouteille (étape 4)
+  PERTE // perte, lie, écart d'inventaire
+  AUTRE
+}
+
+enum StatutLivraison {
+  PLANIFIEE
+  EN_COURS
+  LIVREE
+  ANNULEE
+}
+
+model Lot {
+  id                 Int        @id @default(autoincrement())
+  code               String     @unique @db.VarChar(32) // ex. L2026-0001
+  origine            OrigineLot
+  huilerieId         Int?
+  huilerie           Huilerie?  @relation(fields: [huilerieId], references: [id])
+  varieteId          Int? // vide pour un assemblage de plusieurs variétés
+  variete            Variete?   @relation(fields: [varieteId], references: [id])
+  campagne           String?    @db.VarChar(9) // ex. 2026/2027
+  dateReception      DateTime // date de réception ou d'assemblage
+  quantiteInitialeKg Int
+  numeroBon          String?    @db.VarChar(64) // bon de réception de l'huilerie
+  notes              String?    @db.Text
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  analyses   Analyse[]
+  mouvements Mouvement[]
+  origines   LotOrigine[] @relation("LotEnfant") // lots qui composent cet assemblage
+  enfants    LotOrigine[] @relation("LotParent") // assemblages faits à partir de ce lot
+
+  @@index([dateReception])
+}
+
+// Généalogie : un lot d'assemblage et la quantité prise à chacun de ses lots d'origine.
+model LotOrigine {
+  lotId      Int
+  lot        Lot @relation("LotEnfant", fields: [lotId], references: [id])
+  parentId   Int
+  parent     Lot @relation("LotParent", fields: [parentId], references: [id])
+  quantiteKg Int
+
+  @@id([lotId, parentId])
+}
+
+// Analyse de laboratoire d'un lot (les seuils et alertes qualité viendront à l'étape 3).
+model Analyse {
+  id          Int      @id @default(autoincrement())
+  lotId       Int
+  lot         Lot      @relation(fields: [lotId], references: [id])
+  dateAnalyse DateTime
+  laboratoire String?  @db.VarChar(160)
+  reference   String?  @db.VarChar(64) // n° du bulletin d'analyse
+  acidite     Decimal? @db.Decimal(5, 2) // % acide oléique
+  peroxyde    Decimal? @db.Decimal(6, 2) // meq O2/kg
+  k232        Decimal? @db.Decimal(5, 3)
+  k270        Decimal? @db.Decimal(5, 3)
+  deltaK      Decimal? @db.Decimal(5, 3)
+  polyphenols Int? // mg/kg
+  autres      Json? // autres paramètres libres
+  commentaire String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([lotId, dateAnalyse])
+}
+
+// Une opération de stock (réception, transfert, assemblage, sortie) et ses mouvements.
+model Operation {
+  id        Int           @id @default(autoincrement())
+  type      TypeOperation
+  date      DateTime
+  userId    Int?
+  user      User?         @relation(fields: [userId], references: [id])
+  motif     MotifSortie? // sorties seulement
+  clientId  Int?
+  client    Client?       @relation(fields: [clientId], references: [id])
+  notes     String?       @db.Text
+  createdAt DateTime      @default(now())
+
+  mouvements Mouvement[]
+  livraison  Livraison?
+
+  @@index([date])
+}
+
+// Entrée (+) ou sortie (-) d'une quantité d'un lot dans une cuve.
+model Mouvement {
+  id          Int       @id @default(autoincrement())
+  operationId Int
+  operation   Operation @relation(fields: [operationId], references: [id])
+  lotId       Int
+  lot         Lot       @relation(fields: [lotId], references: [id])
+  stockageId  Int
+  stockage    Stockage  @relation(fields: [stockageId], references: [id])
+  quantiteKg  Int // positif = entrée dans la cuve, négatif = sortie
+
+  @@index([stockageId, lotId])
+  @@index([lotId])
+}
+
+// Transport sous-traité d'une sortie vers le client.
+model Livraison {
+  id                  Int             @id @default(autoincrement())
+  operationId         Int             @unique
+  operation           Operation       @relation(fields: [operationId], references: [id])
+  transporteur        String          @db.VarChar(160)
+  immatriculation     String?         @db.VarChar(32)
+  chauffeur           String?         @db.VarChar(120)
+  numeroBl            String?         @db.VarChar(64) // bon de livraison
+  adresseLivraison    String?         @db.VarChar(255)
+  dateEnlevement      DateTime?
+  dateLivraisonPrevue DateTime?
+  dateLivraison       DateTime? // date de livraison effective
+  statut              StatutLivraison @default(PLANIFIEE)
+  notes               String?         @db.Text
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([statut])
 }
