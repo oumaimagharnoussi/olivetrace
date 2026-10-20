@@ -8,6 +8,7 @@ import { ExportModule } from './export/export.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { PasseportModule } from './passeport/passeport.module.js';
 import { QualiteModule } from './qualite/qualite.module.js';
+import { TableauDeBordModule } from './tableau-de-bord/tableau-de-bord.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ReferentielsModule } from './referentiels/referentiels.module.js';
 import { UsersModule } from './users/users.module.js';
@@ -27,6 +28,7 @@ import { VracModule } from './vrac/vrac.module.js';
     ConditionnementModule,
     PasseportModule,
     ExportModule,
+    TableauDeBordModule,
   ],
   controllers: [AppController],
 })
