@@ -31,7 +31,16 @@ npm install
 npm run dev
 ```
 
-Compte créé par le seed : `admin@olived.tn` / `OliveTrace2026!` (à changer).
+Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed : `admin@olived.tn` / `OliveTrace2026!` (à changer).
+
+## Écrans du frontend
+
+- `/login` : connexion
+- `/` : accueil avec le nombre de référentiels actifs
+- `/referentiels/huileries`, `/referentiels/varietes`, `/referentiels/stockages`, `/referentiels/clients` : liste, ajout, modification, désactivation
+- `/utilisateurs` : gestion des comptes (administrateur seulement)
+
+Les boutons d'ajout et de modification n'apparaissent que pour les rôles autorisés à écrire (les mêmes que dans l'API). Les écrans sont décrits dans `web/src/lib/ressources.ts`.
 
 ## Ce que contient déjà l'API
 
