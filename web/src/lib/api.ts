@@ -34,3 +34,24 @@ export async function api<T = unknown>(path: string, options: { method?: string;
   }
   return data as T;
 }
+
+/** Fichier renvoyé par l'API (image de QR code…), avec le jeton de connexion. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new ApiError(res.status, data?.message ?? `Erreur ${res.status}`);
+  }
+  return res.blob();
+}
+
+/** Télécharge un fichier de l'API sous le nom donné. */
+export async function telecharger(path: string, nomFichier: string) {
+  const url = URL.createObjectURL(await apiBlob(path));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomFichier;
+  a.click();
+  URL.revokeObjectURL(url);
+}

@@ -82,6 +82,8 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/conditionnement/{id}` : fiche d'un lot conditionné, avec la remontée jusqu'aux lots reçus des huileries
 - `/produits-finis` : stock de bouteilles par format et par lot, expéditions, casse et ajustements
 - `/referentiels/formats` : formats de bouteille et de bidon
+- `/conditionnement/{id}/etiquettes` : impression du QR code du lot ou d'une planche d'étiquettes, une par bouteille
+- `/p/{jeton}` : passeport produit public, ouvert en scannant le QR code (sans connexion)
 
 Seul un lot analysé, conforme et non bloqué peut être filtré ou mis en bouteille. Un lot filtré reprend la qualité du lot d'origine tant qu'il n'a pas sa propre analyse.
 
@@ -122,6 +124,11 @@ SMTP_FROM="OliveTrace <votre.adresse@gmail.com>"
   - `GET /api/qualite/alertes`, `GET /api/qualite/controle-expedition?lotId=&clientId=`
   - `GET /api/qualite/specifications`, `POST /api/qualite/specifications`, `PATCH /api/qualite/specifications/:id`
   - `GET /api/qualite/non-conformites`, `POST /api/qualite/non-conformites`, `PATCH /api/qualite/non-conformites/:id`
+- Passeport produit (étape 5) :
+  - `GET /api/conditionnements/:id/passeport`, `PATCH /api/conditionnements/:id/passeport`, `POST /api/conditionnements/:id/passeport/renouveler`
+  - `GET /api/conditionnements/:id/passeport/qr.png`, `GET /api/conditionnements/:id/passeport/qr.svg` (QR code du lot, ou d'une bouteille avec `?unite=12`)
+  - `GET /api/conditionnements/:id/passeport/etiquettes?de=1&a=100` (500 au plus)
+  - `GET /api/public/passeports/:jeton` : sans connexion, les seules informations publiées
 - Santé : `GET /api/health`
 
 Le schéma de données est dans `api/prisma/schema.prisma`.
@@ -145,3 +152,13 @@ Le schéma de données est dans `api/prisma/schema.prisma`.
 - Pour débloquer le lot, la qualité clôture la non-conformité avec une décision : contre-analyse conforme, déclassement (le lot change de catégorie visée), assemblage correctif, dérogation, destruction.
 - Avant une vente, le lot est aussi comparé au cahier des charges du client s'il en a un (ex. polyphénols ≥ 250 mg/kg) : un écart empêche la vente. Un lot sans analyse, une analyse partielle ou une analyse de plus de `ALERTE_AGE_ANALYSE_JOURS` jours (90 par défaut) donnent un avertissement sans bloquer.
 - Les critères des catégories sont modifiables dans `/qualite/criteres` ; le statut des lots analysés est alors recalculé. Critères et non-conformités : rôles Qualité et Direction.
+
+## Passeport produit (QR code)
+
+- Chaque lot conditionné a un passeport, visible sur sa fiche (`/conditionnement/{id}`) : QR code, téléchargement en PNG (1024 px, pour l'imprimeur) ou SVG, impression.
+- Le QR code mène à la page publique `/p/{jeton}`, sans connexion. Le jeton est tiré au hasard : on ne peut pas trouver le passeport d'un autre lot en changeant un numéro.
+- La page publique montre : produit et catégorie, dates de mise en bouteille et DLUO, origine (Tunisie, huileries et régions, variétés, campagne), dernière analyse avec les limites UE, filtration et mise en bouteille, certifications, destination. Elle ne montre jamais le client, les quantités, les opérateurs ni les notes internes.
+- La mention « Conforme au règlement délégué (UE) 2022/2104 » est ajoutée d'office tant que le lot vrac est conforme et non bloqué. Les autres certifications (bio, IGP…) se saisissent dans « Choisir ce qui est affiché », qui permet aussi de masquer les huileries, les analyses, le procédé ou la destination, ou de dépublier le passeport (rôles Direction, Qualité, Export).
+- Étiquettes de bouteille : chaque QR code porte le numéro de la bouteille (1 à nombre d'unités) et une signature. Au scan, la page affiche « Bouteille n° 12 sur 1 200 : numéro authentifié », ou prévient si le numéro a été modifié. La signature utilise `PASSEPORT_SECRET` (à défaut `JWT_SECRET`) : ne plus la changer une fois des étiquettes imprimées.
+- « Renouveler le QR code » change le jeton : les QR codes déjà imprimés ne fonctionnent plus (étiquettes copiées ou perdues).
+- L'adresse dans le QR code est `PASSEPORT_WEB_URL` (à défaut `WEB_URL`) dans `api/.env`. Pour scanner avec un téléphone sur le même Wi-Fi, y mettre l'adresse IP du PC (ex. `http://192.168.1.20:3000`, voir `ipconfig`) puis redémarrer l'API, et lancer le frontend avec `npm run dev -- -H 0.0.0.0`. Windows peut demander d'autoriser Node.js dans le pare-feu.
