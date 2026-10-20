@@ -17,7 +17,7 @@ export function AuthCard({
     <main className="flex min-h-screen items-center justify-center bg-olive-50 px-4">
       <div className="w-full max-w-sm space-y-4">
         <form onSubmit={onSubmit} className="space-y-5 rounded-xl border border-stone-200 bg-white p-8 shadow-sm">
-          <div>
+          <div className="text-center">
             <h1 className="text-2xl font-semibold text-olive-800">OliveTrace</h1>
             <p className="text-sm text-stone-500">{titre}</p>
           </div>
