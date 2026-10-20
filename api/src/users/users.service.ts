@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { AuditService } from '../audit/audit.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -15,7 +15,7 @@ export class UsersService {
   ) {}
 
   findAll() {
-    return this.prisma.user.findMany({ select: publicFields, orderBy: { nom: 'asc' } });
+    return this.prisma.user.findMany({ select: publicFields, orderBy: [{ actif: 'asc' }, { nom: 'asc' }] });
   }
 
   async findOne(id: number) {
@@ -34,6 +34,11 @@ export class UsersService {
   }
 
   async update(id: number, { password, ...dto }: UpdateUserDto, byUserId: number) {
+    // Valider une inscription demande d'attribuer un rôle en même temps.
+    if (dto.actif && !dto.role) {
+      const actuel = await this.findOne(id);
+      if (!actuel.role) throw new BadRequestException('Attribuez un rôle avant d’activer ce compte');
+    }
     const user = await this.prisma.user.update({
       where: { id },
       data: {

@@ -5,7 +5,9 @@ import { ROLE_LABELS, type Role } from "./roles";
 export interface Champ {
   name: string;
   label: string;
-  type?: "text" | "number" | "email" | "password" | "select" | "textarea";
+  type?: "text" | "number" | "email" | "password" | "select" | "textarea" | "checkbox";
+  /** Valeur initiale à la création (« true » pour une case cochée). */
+  defaut?: string;
   options?: { value: string; label: string }[];
   required?: boolean;
   /** Affiché dans le tableau. */
@@ -109,5 +111,7 @@ export const UTILISATEURS: Ressource = {
       options: Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label })),
     },
     { name: "password", label: "Mot de passe (8 caractères min.)", type: "password", requiredOnCreateOnly: true },
+    // Pour valider une inscription : choisir le rôle et cocher cette case.
+    { name: "actif", label: "Compte actif", type: "checkbox", defaut: "true" },
   ],
 };

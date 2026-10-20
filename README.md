@@ -65,6 +65,8 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 ## Écrans du frontend
 
 - `/login` : connexion
+- `/register` : demande de compte (le compte reste « En attente » jusqu'à sa validation)
+- `/forgot-password` et `/reset-password` : mot de passe oublié, par un lien envoyé par e-mail (valable 1 heure)
 - `/` : accueil avec le nombre de référentiels actifs
 - `/referentiels/huileries`, `/referentiels/varietes`, `/referentiels/stockages`, `/referentiels/clients` : liste, ajout, modification, désactivation
 - `/utilisateurs` : gestion des comptes (administrateur seulement)
@@ -76,9 +78,15 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 
 Les boutons d'ajout et de modification n'apparaissent que pour les rôles autorisés à écrire (les mêmes que dans l'API). Les écrans sont décrits dans `web/src/lib/ressources.ts`.
 
+## E-mails
+
+Les inscriptions (prévenir les administrateurs) et le mot de passe oublié envoient des e-mails. Tant que `SMTP_HOST` est vide dans `api/.env`, ils ne partent pas : ils s'affichent dans le terminal de l'API, avec le lien à ouvrir. Pour un vrai envoi, renseigner `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` et `SMTP_FROM`.
+
 ## Ce que contient déjà l'API
 
 - Connexion par email et mot de passe (JWT) : `POST /api/auth/login`, `GET /api/auth/me`
+- Inscription : `POST /api/auth/register`. Le compte est créé sans rôle et inactif ; l'administrateur le valide dans l'écran Utilisateurs (bouton « Valider » : choisir un rôle et cocher « Compte actif »)
+- Mot de passe oublié : `POST /api/auth/forgot-password` puis `POST /api/auth/reset-password`. Seul le hash du jeton est stocké ; un lien sert une seule fois
 - Rôles : ADMIN, DIRECTION, STOCK, QUALITE, PRODUCTION, EXPORT
 - Utilisateurs (ADMIN) : `/api/users`
 - Référentiels : `/api/huileries`, `/api/varietes`, `/api/stockages` (cuves 24 t, citernes 30 t), `/api/clients`

@@ -33,8 +33,9 @@ export class AuthGuard implements CanActivate {
       where: { id: payload.sub },
       select: { id: true, email: true, nom: true, role: true, actif: true },
     });
-    if (!user || !user.actif) throw new UnauthorizedException();
-    request.user = user;
+    // Un compte en attente (inscription non validée) n'a pas de rôle et ne peut rien faire.
+    if (!user || !user.actif || !user.role) throw new UnauthorizedException();
+    request.user = { ...user, role: user.role };
 
     const roles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, targets);
     if (roles?.length && user.role !== Role.ADMIN && !roles.includes(user.role)) {
