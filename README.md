@@ -11,22 +11,7 @@ Plateforme de traçabilité de l'huile d'olive pour OLIVED.
 
 Prérequis : Node.js 22.12 ou plus récent et MySQL 8 installé sur le poste.
 
-### 1. Créer la base MySQL
-
-Dans MySQL Workbench ou en ligne de commande (`mysql -u root -p`), exécuter :
-
-```sql
-CREATE DATABASE olivetrace CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'olivetrace'@'localhost' IDENTIFIED BY 'olivetrace';
--- Prisma Migrate crée une base temporaire (shadow database) en développement :
--- l'utilisateur doit donc pouvoir créer des bases.
-GRANT ALL PRIVILEGES ON *.* TO 'olivetrace'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-Si vous gardez un autre utilisateur ou mot de passe, adaptez `DATABASE_URL` dans `api/.env`.
-
-### 2. Backend (http://localhost:3001/api)
+### 1. Backend (http://localhost:3001/api)
 
 ```bash
 cd api
@@ -49,7 +34,7 @@ npx prisma generate
 
 `migrate dev` applique les nouvelles tables à la base, `generate` met à jour le client Prisma utilisé par le code.
 
-### 3. Frontend (http://localhost:3000)
+### 2. Frontend (http://localhost:3000)
 
 Dans un second terminal :
 
@@ -93,23 +78,6 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 Seul un lot analysé, conforme et non bloqué peut être filtré ou mis en bouteille. Un lot filtré reprend la qualité du lot d'origine tant qu'il n'a pas sa propre analyse.
 
 Les boutons d'ajout et de modification n'apparaissent que pour les rôles autorisés à écrire (les mêmes que dans l'API). Les écrans sont décrits dans `web/src/lib/ressources.ts`.
-
-## E-mails
-
-Les inscriptions (prévenir les administrateurs) et le mot de passe oublié envoient des e-mails. Tant que `SMTP_HOST` est vide dans `api/.env`, ils ne partent pas : ils s'affichent dans le terminal de l'API, avec le lien à ouvrir. Pour un vrai envoi, renseigner `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` et `SMTP_FROM`.
-
-Exemple avec Gmail (il faut un « mot de passe d'application » Google, voir https://myaccount.google.com/apppasswords, la validation en deux étapes doit être activée) :
-
-```
-SMTP_HOST="smtp.gmail.com"
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER="votre.adresse@gmail.com"
-SMTP_PASSWORD="abcdefghijklmnop"
-SMTP_FROM="OliveTrace <votre.adresse@gmail.com>"
-```
-
-`api/.env` n'est jamais versionné (il est dans `.gitignore`) : ne pas y mettre de mot de passe dans un autre fichier.
 
 ## Ce que contient déjà l'API
 
