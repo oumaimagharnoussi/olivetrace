@@ -1,26 +1,32 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Couleurs OliveTrace */
+  --color-olive-50: #f7f8ec;
+  --color-olive-100: #eceed2;
+  --color-olive-200: #d9dea8;
+  --color-olive-600: #6b7a2a;
+  --color-olive-700: #556120;
+  --color-olive-800: #434c1d;
+  --color-olive-900: #2f3514;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #fafaf9;
+  color: #1c1917;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-olive-600 focus:ring-2 focus:ring-olive-200;
+  }
+  .btn-primary {
+    @apply rounded-md bg-olive-700 px-4 py-2 text-sm font-medium text-white hover:bg-olive-800 disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply rounded-md border border-stone-300 bg-white px-4 py-2 text-sm text-stone-700 hover:bg-stone-50;
+  }
 }
