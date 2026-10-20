@@ -7,6 +7,7 @@
 // Étape 6 (export) : expéditions de produits finis et documents PDF du dossier export.
 // Étape 7 (tableau de bord et rapports) : pas de nouvelle table, tout est calculé à partir des données existantes.
 // Étape 8 (intelligence artificielle) : pas de nouvelle table, les modèles sont recalculés sur l'historique (api/src/ia).
+// Étape 9 (blockchain, en option) : scellement du journal d'audit et ancrage de son empreinte sur une blockchain publique.
 
 generator client {
   provider     = "prisma-client"
@@ -138,8 +139,14 @@ model AuditLog {
   donnees   Json?
   createdAt DateTime @default(now())
 
+  // Étape 9 : empreinte SHA-256 de l'événement, calculée à son scellement dans un ancrage.
+  hash      String?  @db.Char(64)
+  ancrageId Int?
+  ancrage   Ancrage? @relation(fields: [ancrageId], references: [id])
+
   @@index([entite, entiteId])
   @@index([createdAt])
+  @@index([ancrageId])
 }
 
 // ---------------------------------------------------------------------------
@@ -489,9 +496,9 @@ model LotConditionne {
   notes           String?               @db.Text
   createdAt       DateTime              @default(now())
 
-  mouvements        MouvementProduitFini[]
-  passeport         Passeport?
-  lignesExpedition  ExpeditionLigne[]
+  mouvements       MouvementProduitFini[]
+  passeport        Passeport?
+  lignesExpedition ExpeditionLigne[]
 
   @@index([lotVracId])
 }
@@ -572,35 +579,35 @@ enum ModeTransport {
 }
 
 model Expedition {
-  id               Int              @id @default(autoincrement())
-  code             String           @unique @db.VarChar(32) // ex. E2026-0001
-  statut           StatutExpedition @default(PREPAREE)
-  clientId         Int
-  client           Client           @relation(fields: [clientId], references: [id])
-  paysDestination  String           @db.VarChar(2) // code ISO 3166-1 alpha-2
-  adresseLivraison String?          @db.VarChar(255)
-  datePrevue       DateTime // date de départ prévue
-  dateDepart       DateTime? // renseignée au départ
-  dateLivraison    DateTime?
-  incoterm         String?          @db.VarChar(3) // EXW, FCA, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP
-  lieuIncoterm     String?          @db.VarChar(120) // ex. FOB Sfax, CIF Marseille
-  modeTransport    ModeTransport    @default(MARITIME)
-  transporteur     String?          @db.VarChar(160) // compagnie maritime, transitaire
-  navire           String?          @db.VarChar(120) // navire et voyage, ou n° de vol
-  portChargement   String?          @db.VarChar(120)
-  portDechargement String?          @db.VarChar(120)
-  numeroConteneur  String?          @db.VarChar(32)
-  numeroPlomb      String?          @db.VarChar(32)
-  numeroConnaissement String?       @db.VarChar(64) // B/L, CMR ou LTA
-  numeroCommande   String?          @db.VarChar(64) // commande du client
-  numeroFacture    String?          @db.VarChar(64)
-  nombrePalettes   Int?
-  poidsBrutKg      Int? // pesée réelle avec emballages ; laissée vide, seul le poids net est imprimé
-  notes            String?          @db.Text
-  userId           Int?
-  user             User?            @relation(fields: [userId], references: [id])
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                  Int              @id @default(autoincrement())
+  code                String           @unique @db.VarChar(32) // ex. E2026-0001
+  statut              StatutExpedition @default(PREPAREE)
+  clientId            Int
+  client              Client           @relation(fields: [clientId], references: [id])
+  paysDestination     String           @db.VarChar(2) // code ISO 3166-1 alpha-2
+  adresseLivraison    String?          @db.VarChar(255)
+  datePrevue          DateTime // date de départ prévue
+  dateDepart          DateTime? // renseignée au départ
+  dateLivraison       DateTime?
+  incoterm            String?          @db.VarChar(3) // EXW, FCA, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP
+  lieuIncoterm        String?          @db.VarChar(120) // ex. FOB Sfax, CIF Marseille
+  modeTransport       ModeTransport    @default(MARITIME)
+  transporteur        String?          @db.VarChar(160) // compagnie maritime, transitaire
+  navire              String?          @db.VarChar(120) // navire et voyage, ou n° de vol
+  portChargement      String?          @db.VarChar(120)
+  portDechargement    String?          @db.VarChar(120)
+  numeroConteneur     String?          @db.VarChar(32)
+  numeroPlomb         String?          @db.VarChar(32)
+  numeroConnaissement String?          @db.VarChar(64) // B/L, CMR ou LTA
+  numeroCommande      String?          @db.VarChar(64) // commande du client
+  numeroFacture       String?          @db.VarChar(64)
+  nombrePalettes      Int?
+  poidsBrutKg         Int? // pesée réelle avec emballages ; laissée vide, seul le poids net est imprimé
+  notes               String?          @db.Text
+  userId              Int?
+  user                User?            @relation(fields: [userId], references: [id])
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 
   lignes ExpeditionLigne[]
 
@@ -621,4 +628,45 @@ model ExpeditionLigne {
 
   @@unique([expeditionId, lotConditionneId])
   @@index([lotConditionneId])
+}
+
+// ---------------------------------------------------------------------------
+// Étape 9 : blockchain (option)
+// ---------------------------------------------------------------------------
+// Règles :
+// - on n'écrit jamais les données sur la blockchain, seulement une empreinte (hash SHA-256) : elles restent confidentielles ;
+// - à intervalle régulier, les événements du journal d'audit pas encore scellés forment un ancrage : chaque événement reçoit
+//   son empreinte, les empreintes forment un arbre de Merkle, et l'empreinte de l'ancrage relie sa racine à l'ancrage précédent ;
+// - cette empreinte est inscrite dans une transaction sur Polygon (si un portefeuille est configuré), qui l'horodate ;
+// - modifier ou supprimer un événement après coup change son empreinte, la racine et la chaîne : la vérification le détecte,
+//   et la transaction publique prouve ce qui existait à la date de l'ancrage.
+
+enum StatutAncrage {
+  SCELLE // empreinte calculée et gardée dans la base, pas (encore) envoyée sur la blockchain
+  ENVOYE // transaction envoyée, en attente de confirmation
+  CONFIRME // transaction incluse dans un bloc
+  ERREUR // échec de l'envoi : nouvel essai au prochain passage
+}
+
+model Ancrage {
+  id                  Int           @id @default(autoincrement())
+  racineMerkle        String        @db.Char(64) // racine de l'arbre de Merkle des empreintes des événements
+  empreinte           String        @unique @db.Char(64) // SHA-256(empreinte précédente + racine + nombre d'événements) : valeur inscrite sur la blockchain
+  empreintePrecedente String?       @db.Char(64)
+  nombreEvenements    Int
+  premierAuditId      BigInt
+  dernierAuditId      BigInt
+  statut              StatutAncrage @default(SCELLE)
+  reseau              String?       @db.VarChar(32) // ex. polygon, polygon-amoy
+  chainId             Int?
+  txHash              String?       @db.VarChar(66)
+  blocNumero          Int?
+  blocDate            DateTime?
+  erreur              String?       @db.Text
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  evenements AuditLog[]
+
+  @@index([statut])
 }

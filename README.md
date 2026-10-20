@@ -70,6 +70,7 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/` : tableau de bord (mis à jour chaque minute) : lots actifs, stock par cuve et en produits finis, alertes qualité et non-conformités ouvertes, expéditions en cours par destination
 - `/rapports` : rapports sur une période (campagne par défaut) avec graphiques et export CSV : réceptions par huilerie, variété et mois, ventes en vrac, mise en bouteille, exports par pays, client et mois (direction et administrateurs)
 - `/ia` : intelligence artificielle : qualité prévue du prochain lot de chaque huilerie, évolution de l'acidité et du peroxyde des lots en stock (délai avant la limite extra vierge), lots et formats recommandés pour un client, anomalies (analyses inhabituelles, quantités et dates incohérentes) ; la prévision s'affiche aussi dans le formulaire de réception
+- `/blockchain` : ancrage du journal d'audit (direction et administrateurs) : ancrages et transactions, vérification d'intégrité, preuve d'un événement
 - `/referentiels/huileries`, `/referentiels/varietes`, `/referentiels/stockages`, `/referentiels/clients` : liste, ajout, modification, désactivation
 - `/utilisateurs` : gestion des comptes (administrateur seulement)
 - `/stock` : état des cuves et citernes (lot contenu, remplissage, ancienneté) et alertes
@@ -200,3 +201,15 @@ ou indiquer le navigateur dans `api/.env`, par exemple `CHROME_PATH='C:\Program 
 ## Intelligence artificielle
 
 Les modèles sont calculés par l'API (module `api/src/ia`), sans service à installer : ils apprennent à chaque réception et à chaque analyse saisies. Ce sont des statistiques robustes adaptées à un historique court (une campagne) : moyenne de l'huilerie rapprochée de la moyenne générale quand elle a peu de lots, écart absolu médian pour repérer les valeurs inhabituelles, tendance linéaire pour l'évolution en cuve. Chaque résultat indique sur combien de lots il repose. Avec plusieurs campagnes d'historique, un service Python (scikit-learn) pourra prendre le relais sans changer les écrans.
+
+## Blockchain (option)
+
+Le journal d'audit est scellé par lots (« ancrages ») : chaque événement reçoit une empreinte SHA-256, les empreintes forment un arbre de Merkle, et l'empreinte de l'ancrage (reliée à l'ancrage précédent) est inscrite dans une transaction sur Polygon. Les données ne quittent jamais la base : seule l'empreinte est publique. Le bouton « Vérifier l'intégrité » de la page `/blockchain` recalcule tout et signale un événement modifié ou supprimé après coup.
+
+Sans configuration, les ancrages sont seulement scellés dans la base. Pour la preuve publique, dans `api/.env` :
+
+1. Créer un portefeuille dédié (par exemple avec MetaMask) et copier sa clé privée dans `BLOCKCHAIN_CLE_PRIVEE`.
+2. Pour essayer gratuitement : `BLOCKCHAIN_RPC_URL="https://rpc-amoy.polygon.technology"` (réseau de test Polygon Amoy) et des jetons de test sur https://faucet.polygon.technology.
+3. En production : une adresse RPC du réseau Polygon (ex. `https://polygon-rpc.com`) et quelques POL sur le portefeuille ; chaque ancrage coûte une fraction de centime.
+
+Les ancrages déjà scellés sont envoyés au premier passage après la configuration. `BLOCKCHAIN_INTERVALLE_MINUTES` règle la fréquence (60 par défaut).
