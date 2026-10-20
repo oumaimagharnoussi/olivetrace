@@ -9,7 +9,7 @@ Plateforme de traçabilité de l'huile d'olive pour OLIVED.
 
 ## Démarrer en local
 
-Prérequis : Node.js 22+ et MySQL 8 installé sur le poste.
+Prérequis : Node.js 22.12 ou plus récent et MySQL 8 installé sur le poste.
 
 ### 1. Créer la base MySQL
 
@@ -84,6 +84,8 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/referentiels/formats` : formats de bouteille et de bidon
 - `/conditionnement/{id}/etiquettes` : impression du QR code du lot ou d'une planche d'étiquettes, une par bouteille
 - `/p/{jeton}` : passeport produit public, ouvert en scannant le QR code (sans connexion)
+- `/expeditions` : expéditions export (client, pays de destination, incoterm, transport, lots conditionnés)
+- `/expeditions/{id}` : fiche d'une expédition, départ et livraison, téléchargement du dossier export en PDF
 
 Seul un lot analysé, conforme et non bloqué peut être filtré ou mis en bouteille. Un lot filtré reprend la qualité du lot d'origine tant qu'il n'a pas sa propre analyse.
 
@@ -129,6 +131,10 @@ SMTP_FROM="OliveTrace <votre.adresse@gmail.com>"
   - `GET /api/conditionnements/:id/passeport/qr.png`, `GET /api/conditionnements/:id/passeport/qr.svg` (QR code du lot, ou d'une bouteille avec `?unite=12`)
   - `GET /api/conditionnements/:id/passeport/etiquettes?de=1&a=100` (500 au plus)
   - `GET /api/public/passeports/:jeton` : sans connexion, les seules informations publiées
+- Export (étape 6) :
+  - `GET /api/expeditions?statut=`, `GET /api/expeditions/:id`, `POST /api/expeditions`, `PATCH /api/expeditions/:id`
+  - `POST /api/expeditions/:id/statut` (`EXPEDIEE` : le stock sort ; `LIVREE` ; `ANNULEE` avant le départ)
+  - `GET /api/expeditions/:id/documents/:type` en PDF, avec `type` = `colisage`, `origine`, `analyses`, `conformite`, `fiches` ou `dossier` (tous à la suite)
 - Santé : `GET /api/health`
 
 Le schéma de données est dans `api/prisma/schema.prisma`.
@@ -162,3 +168,29 @@ Le schéma de données est dans `api/prisma/schema.prisma`.
 - Étiquettes de bouteille : chaque QR code porte le numéro de la bouteille (1 à nombre d'unités) et une signature. Au scan, la page affiche « Bouteille n° 12 sur 1 200 : numéro authentifié », ou prévient si le numéro a été modifié. La signature utilise `PASSEPORT_SECRET` (à défaut `JWT_SECRET`) : ne plus la changer une fois des étiquettes imprimées.
 - « Renouveler le QR code » change le jeton : les QR codes déjà imprimés ne fonctionnent plus (étiquettes copiées ou perdues).
 - L'adresse dans le QR code est `PASSEPORT_WEB_URL` (à défaut `WEB_URL`) dans `api/.env`. Pour scanner avec un téléphone sur le même Wi-Fi, y mettre l'adresse IP du PC (ex. `http://192.168.1.20:3000`, voir `ipconfig`) puis redémarrer l'API, et lancer le frontend avec `npm run dev -- -H 0.0.0.0`. Windows peut demander d'autoriser Node.js dans le pare-feu.
+
+## Export et dossier PDF
+
+- Une expédition regroupe un ou plusieurs lots conditionnés pour un client. Le pays de destination est celui du client par défaut ; les pays de l'Union européenne sont signalés.
+- Préparée, elle ne touche pas au stock : on peut éditer le dossier et l'envoyer au transitaire. « Valider le départ » sort les unités du stock de produits finis (mouvements « Expédition » avec le numéro E2026-0001 en référence). Une expédition partie ne s'annule plus : un retour se saisit par un ajustement d'inventaire.
+- Contrôle qualité (étapes 3 et 4) : un lot bloqué par une non-conformité ou hors cahier des charges du client ne peut pas être ajouté ni partir. La déclaration de conformité UE, et donc le dossier complet, demande en plus que chaque lot soit analysé et conforme.
+- Documents PDF, générés à la demande avec les données du jour :
+  - liste de colisage : lots, codes NC (1509 20 00 extra vierge, 1509 30 00 vierge), unités, cartons, volume, poids net, transport ;
+  - certificat d'origine : huileries, variétés et campagnes de chaque lot, déclaration d'origine préférentielle Tunisie (convention paneuroméditerranéenne). Sans numéro d'exportateur agréé (`EXPORTATEUR_AGREE`), elle ne vaut que jusqu'à 6 000 € ; au-delà, l'EUR.1 visé par la douane reste nécessaire ;
+  - bulletins d'analyse : dernière analyse de chaque lot comparée aux limites UE (un lot filtré reprend l'analyse de son lot d'origine) ;
+  - déclaration de conformité UE : règlements (UE) 2022/2104 et 2022/2105, 1169/2011, 1935/2004 ;
+  - fiches techniques produit : une par lot (origine, procédé, format, DLUO, conservation, analyse).
+- L'exportateur imprimé sur les documents (adresse, matricule fiscal, signataire…) se règle dans `api/.env` (`EXPORTATEUR_…`). Les textes réglementaires sont à faire valider par le service qualité ou le transitaire avant le premier envoi.
+- L'empreinte SHA-256 de chaque PDF téléchargé est gardée dans le journal d'audit.
+- Création, modification et départ : rôles Direction et Export. Téléchargement des PDF : tout utilisateur connecté.
+
+### PDF sous Windows (Puppeteer)
+
+Les PDF sont imprimés par un Chrome sans fenêtre (Puppeteer). `npm install` dans `api` télécharge ce Chrome une fois (environ 170 Mo, dans `%USERPROFILE%\.cache\puppeteer`). S'il manque (installation hors ligne, proxy), l'API prend Microsoft Edge, présent sur Windows 10 et 11, ou Chrome s'il est installé. En cas d'erreur « Aucun navigateur pour générer les PDF » :
+
+```bash
+cd api
+npx puppeteer browsers install chrome
+```
+
+ou indiquer le navigateur dans `api/.env`, par exemple `CHROME_PATH='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'`, puis redémarrer l'API.

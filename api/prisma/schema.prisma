@@ -4,6 +4,7 @@
 // Étape 3 (qualité) : critères de qualité, résultat de chaque analyse, non-conformités et blocage des lots.
 // Étape 4 (conditionnement) : filtration, mise en bouteille (lots conditionnés) et stock de produits finis.
 // Étape 5 (passeport produit) : QR code de chaque lot conditionné et de chaque bouteille, page publique.
+// Étape 6 (export) : expéditions de produits finis et documents PDF du dossier export.
 
 generator client {
   provider     = "prisma-client"
@@ -47,6 +48,7 @@ model User {
   nonConformitesOuvertes  NonConformite[]        @relation("NcOuvertePar")
   nonConformitesCloturees NonConformite[]        @relation("NcClotureePar")
   mouvementsProduits      MouvementProduitFini[]
+  expeditions             Expedition[]
 }
 
 // Lien de réinitialisation du mot de passe : seul le hash SHA-256 du jeton est stocké.
@@ -120,6 +122,7 @@ model Client {
   specifications     Specification[] // cahiers des charges qualité du client
   lotsConditionnes   LotConditionne[]
   mouvementsProduits MouvementProduitFini[]
+  expeditions        Expedition[]
 }
 
 // Journal de toutes les modifications : base de la traçabilité et de l'option blockchain.
@@ -484,8 +487,9 @@ model LotConditionne {
   notes           String?               @db.Text
   createdAt       DateTime              @default(now())
 
-  mouvements MouvementProduitFini[]
-  passeport  Passeport?
+  mouvements        MouvementProduitFini[]
+  passeport         Passeport?
+  lignesExpedition  ExpeditionLigne[]
 
   @@index([lotVracId])
 }
@@ -505,6 +509,8 @@ model MouvementProduitFini {
   user             User?                @relation(fields: [userId], references: [id])
   notes            String?              @db.Text
   createdAt        DateTime             @default(now())
+
+  ligneExpedition ExpeditionLigne? // sortie créée au départ d'une expédition
 
   @@index([lotConditionneId])
   @@index([date])
@@ -537,4 +543,80 @@ model Passeport {
   derniereConsultation DateTime?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Étape 6 : export
+// ---------------------------------------------------------------------------
+// Règles :
+// - une expédition regroupe des lots conditionnés pour un client et un pays de destination (UE en priorité) ;
+// - préparée, elle ne touche pas au stock : le dossier export (PDF) peut être édité et envoyé au transitaire ;
+// - au départ, chaque ligne devient une sortie du stock de produits finis (mouvement EXPEDITION) ;
+// - le contrôle qualité des étapes 3 et 4 s'applique à la création, au départ et à la déclaration de conformité :
+//   un lot bloqué, non conforme ou hors cahier des charges du client ne part pas.
+
+enum StatutExpedition {
+  PREPAREE // dossier en cours, stock non sorti
+  EXPEDIEE // marchandise partie : le stock est sorti
+  LIVREE
+  ANNULEE // seulement avant le départ
+}
+
+enum ModeTransport {
+  MARITIME
+  ROUTIER
+  AERIEN
+  FERROVIAIRE
+}
+
+model Expedition {
+  id               Int              @id @default(autoincrement())
+  code             String           @unique @db.VarChar(32) // ex. E2026-0001
+  statut           StatutExpedition @default(PREPAREE)
+  clientId         Int
+  client           Client           @relation(fields: [clientId], references: [id])
+  paysDestination  String           @db.VarChar(2) // code ISO 3166-1 alpha-2
+  adresseLivraison String?          @db.VarChar(255)
+  datePrevue       DateTime // date de départ prévue
+  dateDepart       DateTime? // renseignée au départ
+  dateLivraison    DateTime?
+  incoterm         String?          @db.VarChar(3) // EXW, FCA, FOB, CFR, CIF, CPT, CIP, DAP, DPU, DDP
+  lieuIncoterm     String?          @db.VarChar(120) // ex. FOB Sfax, CIF Marseille
+  modeTransport    ModeTransport    @default(MARITIME)
+  transporteur     String?          @db.VarChar(160) // compagnie maritime, transitaire
+  navire           String?          @db.VarChar(120) // navire et voyage, ou n° de vol
+  portChargement   String?          @db.VarChar(120)
+  portDechargement String?          @db.VarChar(120)
+  numeroConteneur  String?          @db.VarChar(32)
+  numeroPlomb      String?          @db.VarChar(32)
+  numeroConnaissement String?       @db.VarChar(64) // B/L, CMR ou LTA
+  numeroCommande   String?          @db.VarChar(64) // commande du client
+  numeroFacture    String?          @db.VarChar(64)
+  nombrePalettes   Int?
+  poidsBrutKg      Int? // pesée réelle avec emballages ; laissée vide, seul le poids net est imprimé
+  notes            String?          @db.Text
+  userId           Int?
+  user             User?            @relation(fields: [userId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  lignes ExpeditionLigne[]
+
+  @@index([statut])
+  @@index([datePrevue])
+}
+
+// Un lot conditionné dans une expédition.
+model ExpeditionLigne {
+  id               Int                   @id @default(autoincrement())
+  expeditionId     Int
+  expedition       Expedition            @relation(fields: [expeditionId], references: [id], onDelete: Cascade)
+  lotConditionneId Int
+  lotConditionne   LotConditionne        @relation(fields: [lotConditionneId], references: [id])
+  quantiteUnites   Int
+  mouvementId      Int?                  @unique // sortie de stock créée au départ
+  mouvement        MouvementProduitFini? @relation(fields: [mouvementId], references: [id])
+
+  @@unique([expeditionId, lotConditionneId])
+  @@index([lotConditionneId])
 }

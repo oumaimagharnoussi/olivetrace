@@ -8,5 +8,6 @@ import { PasseportService } from './passeport.service.js';
   imports: [QualiteModule],
   controllers: [PasseportController, PasseportPublicController],
   providers: [PasseportService],
+  exports: [PasseportService],
 })
 export class PasseportModule {}
