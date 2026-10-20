@@ -548,6 +548,7 @@ model Passeport {
   afficherAnalyses     Boolean        @default(true)
   afficherProcede      Boolean        @default(true)
   afficherDestination  Boolean        @default(true)
+  afficherBlockchain   Boolean        @default(true) // preuves d'ancrage des étapes de fabrication (étape 9)
   consultations        Int            @default(0)
   derniereConsultation DateTime?
   createdAt            DateTime       @default(now())

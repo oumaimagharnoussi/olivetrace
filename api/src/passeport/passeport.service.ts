@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config';
 import QRCode from 'qrcode';
 import { AuditService } from '../audit/audit.service.js';
+import { BlockchainService } from '../blockchain/blockchain.service.js';
 import type { ParametreAnalyse } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PARAMETRES } from '../qualite/regles.js';
@@ -33,6 +34,7 @@ export class PasseportService {
     private readonly prisma: PrismaService,
     private readonly qualite: QualiteService,
     private readonly audit: AuditService,
+    private readonly blockchain: BlockchainService,
     private readonly config: ConfigService,
   ) {}
 
@@ -147,6 +149,7 @@ export class PasseportService {
       passeport.afficherAnalyses ? this.qualite.sourceQualite(this.prisma, lot.lotVracId) : null,
       passeport.afficherAnalyses ? this.qualite.criteresParCategorie(this.prisma) : null,
     ]);
+    const blockchain = passeport.afficherBlockchain ? await this.preuvesBlockchain(lot.id, ascendance) : null;
     await this.prisma.passeport.update({
       where: { id: passeport.id },
       data: { consultations: { increment: 1 }, derniereConsultation: new Date() },
@@ -212,6 +215,34 @@ export class PasseportService {
           ? { pays: nomPays(lot.paysDestination), codePays: lot.paysDestination, marche: lot.destination }
           : null,
       certifications,
+      blockchain,
+    };
+  }
+
+  /**
+   * Étapes de fabrication du lot (réceptions, assemblages, filtrations, analyses, mise en bouteille) et leur preuve
+   * d'ancrage blockchain : empreinte et transaction seulement, jamais les quantités, clients ou opérateurs.
+   */
+  private async preuvesBlockchain(lotConditionneId: number, ascendance: Awaited<ReturnType<PasseportService['ascendance']>>) {
+    const analyses = await this.prisma.analyse.findMany({ where: { lotId: { in: ascendance.lots.map((l) => l.id) } }, select: { id: true } });
+    const origines = new Map(ascendance.lots.map((l) => [l.id, l.origine]));
+    const preuves = await this.blockchain.preuvesPubliques([
+      ...ascendance.lots.filter((l) => l.origine !== 'FILTRATION').map((l) => ({ entite: 'Lot', entiteId: l.id })),
+      ...ascendance.filtrationIds.map((id) => ({ entite: 'Filtration', entiteId: id })),
+      ...analyses.map((a) => ({ entite: 'Analyse', entiteId: a.id })),
+      { entite: 'LotConditionne', entiteId: lotConditionneId },
+    ]);
+    const libelle = (p: (typeof preuves)[number]) =>
+      p.entite === 'Lot'
+        ? origines.get(p.entiteId) === 'ASSEMBLAGE'
+          ? 'Assemblage'
+          : "Réception de l'huile"
+        : ({ Filtration: 'Filtration', Analyse: 'Analyse de laboratoire', LotConditionne: 'Mise en bouteille' } as Record<string, string>)[p.entite];
+    const etapes = preuves.map(({ entite: _e, entiteId: _id, ...p }) => ({ etape: libelle({ entite: _e, entiteId: _id, ...p }), ...p }));
+    return {
+      etapes,
+      toutesAncrees: etapes.length > 0 && etapes.every((e) => e.ancre && e.intact),
+      intact: etapes.every((e) => e.intact),
     };
   }
 
@@ -221,11 +252,13 @@ export class PasseportService {
     const varietes = new Set<string>();
     const campagnes = new Set<string>();
     const filtrations: { date: Date; typeFiltre: string | null; porositeMicrons: number | null }[] = [];
+    const lots: { id: number; origine: string }[] = [];
+    const filtrationIds: number[] = [];
     let assemblage = false;
     const vus = new Set<number>();
     let courants = [lotId];
     while (courants.length) {
-      const lots = await this.prisma.lot.findMany({
+      const niveau = await this.prisma.lot.findMany({
         where: { id: { in: courants } },
         select: {
           id: true,
@@ -234,17 +267,19 @@ export class PasseportService {
           huilerie: { select: { nom: true, region: true } },
           variete: { select: { nom: true } },
           origines: { select: { parentId: true } },
-          filtration: { select: { typeFiltre: true, porositeMicrons: true, operation: { select: { date: true } } } },
+          filtration: { select: { id: true, typeFiltre: true, porositeMicrons: true, operation: { select: { date: true } } } },
         },
       });
       const suivants: number[] = [];
-      for (const l of lots) {
+      for (const l of niveau) {
         vus.add(l.id);
+        lots.push({ id: l.id, origine: l.origine });
         if (l.origine === 'ASSEMBLAGE') assemblage = true;
         if (l.huilerie) huileries.set(l.huilerie.nom, l.huilerie);
         if (l.variete) varietes.add(l.variete.nom);
         if (l.campagne) campagnes.add(l.campagne);
         if (l.filtration) {
+          filtrationIds.push(l.filtration.id);
           filtrations.push({
             date: l.filtration.operation.date,
             typeFiltre: l.filtration.typeFiltre,
@@ -261,6 +296,8 @@ export class PasseportService {
       campagnes: [...campagnes].sort(),
       assemblage,
       filtrations: filtrations.sort((x, y) => x.date.getTime() - y.date.getTime()),
+      lots,
+      filtrationIds,
     };
   }
 }

@@ -233,6 +233,39 @@ export class BlockchainService implements OnModuleInit, OnModuleDestroy {
     return { ok: resultats.every((r) => r.ok), verifieLe: new Date(), evenementsVerifies, ancrages: resultats };
   }
 
+  /**
+   * Preuves publiques (page du QR code) : pour chaque événement demandé, s'il est intact (empreinte recalculée côté serveur),
+   * son état de scellement et la transaction qui l'ancre. Ni le contenu ni l'empreinte de l'événement : une empreinte publique
+   * permettrait de tester des hypothèses sur le contenu (quantité, client). Seule l'empreinte de l'ancrage, déjà publique
+   * dans la transaction, est donnée.
+   */
+  async preuvesPubliques(references: { entite: string; entiteId: number }[]) {
+    if (!references.length) return [];
+    const evenements = await this.prisma.auditLog.findMany({
+      where: { action: 'CREATE', OR: references.map((r) => ({ entite: r.entite, entiteId: String(r.entiteId) })) },
+      orderBy: { id: 'asc' },
+      select: { ...selectEvenement, ancrage: { select: { id: true, statut: true, empreinte: true, chainId: true, txHash: true, blocNumero: true, blocDate: true, reseau: true } } },
+    });
+    return evenements.map(({ ancrage, ...e }) => {
+      const empreinte = empreinteEvenement(e);
+      const ancre = ancrage?.statut === 'CONFIRME';
+      return {
+        entite: e.entite,
+        entiteId: Number(e.entiteId),
+        date: e.createdAt.toISOString().slice(0, 10),
+        // Une empreinte recalculée différente de celle du scellement : l'événement a été modifié depuis.
+        intact: e.hash === null || e.hash === empreinte,
+        scelle: Boolean(ancrage),
+        ancre,
+        reseau: ancre ? ancrage.reseau : null,
+        bloc: ancre ? { numero: ancrage.blocNumero, date: ancrage.blocDate } : null,
+        empreinteAncrage: ancre ? ancrage.empreinte : null,
+        txHash: ancre ? ancrage.txHash : null,
+        lien: ancre ? this.lienTransaction(ancrage) : null,
+      };
+    });
+  }
+
   /** Preuve d'un événement : son empreinte, son chemin de Merkle jusqu'à la racine, et la transaction qui l'ancre. */
   async preuve(auditId: bigint) {
     const evenement = await this.prisma.auditLog.findUnique({ where: { id: auditId }, select: { ...selectEvenement, ancrage: true } });

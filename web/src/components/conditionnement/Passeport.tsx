@@ -136,6 +136,7 @@ const RUBRIQUES = [
   ["afficherAnalyses", "Résultats d'analyse"],
   ["afficherProcede", "Filtration et mise en bouteille"],
   ["afficherDestination", "Pays et marché de destination"],
+  ["afficherBlockchain", "Preuves d'ancrage blockchain des étapes"],
 ] as const;
 
 function FormulaireReglages({ passeport, chemin, onAnnuler, onFin }: { passeport: Passeport; chemin: string; onAnnuler: () => void; onFin: () => void }) {
@@ -148,6 +149,7 @@ function FormulaireReglages({ passeport, chemin, onAnnuler, onFin }: { passeport
     afficherAnalyses: passeport.afficherAnalyses,
     afficherProcede: passeport.afficherProcede,
     afficherDestination: passeport.afficherDestination,
+    afficherBlockchain: passeport.afficherBlockchain,
   });
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);

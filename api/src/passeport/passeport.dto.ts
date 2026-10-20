@@ -26,5 +26,8 @@ export class PasseportDto {
   afficherProcede?: boolean;
 
   @IsOptional() @IsBoolean()
+  afficherBlockchain?: boolean;
+
+  @IsOptional() @IsBoolean()
   afficherDestination?: boolean;
 }

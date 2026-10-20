@@ -208,6 +208,46 @@ function Fiche({ p }: { p: PasseportPublic }) {
         </Section>
       )}
 
+      {p.blockchain && p.blockchain.etapes.length > 0 && (
+        <Section titre="Preuve blockchain">
+          <p className={`mb-3 text-sm ${p.blockchain.intact ? "text-stone-600" : "text-red-700"}`}>
+            {!p.blockchain.intact
+              ? "Attention : un enregistrement de ce lot a été modifié après son scellement."
+              : p.blockchain.toutesAncrees
+                ? "Chaque étape ci-dessous a été scellée et horodatée sur une blockchain publique : elle ne peut plus être modifiée sans que cela se voie."
+                : "Les étapes sont scellées au fur et à mesure ; celles marquées « en cours » seront horodatées sur la blockchain au prochain ancrage."}
+          </p>
+          <ol className="space-y-2 text-sm">
+            {p.blockchain.etapes.map((e, i) => (
+              <li key={i} className="flex items-start justify-between gap-3 border-t border-stone-100 pt-2">
+                <span>
+                  <span className="font-medium text-stone-900">{e.etape}</span>
+                  <span className="text-stone-500"> · {jour(e.date)}</span>
+                </span>
+                <span className="text-right">
+                  {!e.intact ? (
+                    <span className="text-red-700">modifiée</span>
+                  ) : e.ancre ? (
+                    <>
+                      <span className="text-olive-700">✓ ancrée</span>
+                      {e.lien ? (
+                        <a href={e.lien} target="_blank" rel="noreferrer" className="block text-xs text-olive-700 underline">
+                          voir la transaction
+                        </a>
+                      ) : (
+                        e.txHash && <span className="block font-mono text-[10px] text-stone-500">{e.txHash.slice(0, 14)}…</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-stone-500">{e.scelle ? "scellée, en cours" : "en cours"}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </Section>
+      )}
+
       <footer className="pt-4 text-center text-xs text-stone-500">Passeport produit OliveTrace · informations publiées par {p.producteur}</footer>
     </main>
   );
