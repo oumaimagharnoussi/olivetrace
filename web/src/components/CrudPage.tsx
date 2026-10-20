@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { PasswordInput } from "./PasswordInput";
 import { ROLE_LABELS, type Role } from "@/lib/roles";
 import { TYPE_STOCKAGE, type Champ, type Ressource } from "@/lib/ressources";
 
@@ -252,6 +253,8 @@ function Formulaire({
                 </select>
               ) : c.type === "textarea" ? (
                 <textarea {...props} rows={3} />
+              ) : c.type === "password" ? (
+                <PasswordInput {...props} autoComplete="new-password" />
               ) : (
                 <input {...props} type={c.type ?? "text"} min={c.type === "number" ? 1 : undefined} />
               )}
