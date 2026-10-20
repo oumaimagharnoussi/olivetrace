@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PasswordInput } from "./PasswordInput";
 
 /** Cadre commun des pages publiques (connexion, inscription, mot de passe). */
 export function AuthCard({
@@ -46,7 +47,7 @@ export function Champ({
       <label htmlFor={id} className="mb-1 block text-sm text-stone-700">
         {label}
       </label>
-      <input id={id} className="input" {...props} />
+      {props.type === "password" ? <PasswordInput id={id} {...props} /> : <input id={id} className="input" {...props} />}
     </div>
   );
 }
