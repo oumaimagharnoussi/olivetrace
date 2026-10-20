@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { CATEGORIES } from "@/lib/qualite";
 import { useApi } from "@/lib/useApi";
 import { type Cuve, type Ref, aujourdhui, campagneEnCours, kg } from "@/lib/vrac";
+import { PrevisionQualite } from "@/components/ia/PrevisionQualite";
 import { ChampsAnalyse, analyseVersApi, analyseVide } from "./ChampsAnalyse";
 import { Champ, Erreur } from "./ui";
 
@@ -113,6 +114,8 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
           </select>
         </Champ>
       </div>
+
+      <PrevisionQualite huilerieId={lot.huilerieId} varieteId={lot.varieteId} />
 
       <div className="space-y-2">
         <div className="text-sm text-stone-700">

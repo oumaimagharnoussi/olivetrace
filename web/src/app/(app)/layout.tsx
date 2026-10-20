@@ -31,6 +31,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/conditionnement", label: "Mise en bouteille" },
     { href: "/produits-finis", label: "Produits finis" },
     { href: "/expeditions", label: "Expéditions export" },
+    { href: "/ia", label: "Intelligence artificielle" },
     ...Object.entries(REFERENTIELS).map(([type, r]) => ({ href: `/referentiels/${type}`, label: r.titre })),
     ...(user.role === "ADMIN" ? [{ href: "/utilisateurs", label: "Utilisateurs" }] : []),
   ];

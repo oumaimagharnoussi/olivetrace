@@ -7,6 +7,7 @@ import { Carte, Erreur, Tableau, td } from "@/components/vrac/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { COULEURS_STATUT, STATUTS_EXPEDITION, nomPays } from "@/lib/export";
+import type { Anomalies, Evolution } from "@/lib/ia";
 import { STATUTS_NC } from "@/lib/qualite";
 import { TYPE_STOCKAGE } from "@/lib/ressources";
 import { type EtatTableauDeBord, ROLES_RAPPORTS, entier, litresTexte } from "@/lib/tableau-de-bord";
@@ -19,6 +20,8 @@ const RAFRAICHISSEMENT_MS = 60_000;
 export default function TableauDeBordPage() {
   const { user, can } = useAuth();
   const { data, erreur, recharger, chargeLe: majA } = useApi<EtatTableauDeBord>("/tableau-de-bord");
+  const anomalies = useApi<Anomalies>("/ia/anomalies?jours=30");
+  const evolution = useApi<Evolution>("/ia/evolution");
   const [inscriptions, setInscriptions] = useState(0);
   const estAdmin = user?.role === "ADMIN";
 
@@ -35,6 +38,8 @@ export default function TableauDeBordPage() {
   }, [estAdmin]);
 
   const i = data?.indicateurs;
+  const nbAnomalies = anomalies.data?.anomalies.length ?? 0;
+  const nbDepassements = evolution.data?.lots.filter((l) => l.alerte && (l.joursAvantLimite ?? 0) > 0).length ?? 0;
 
   return (
     <div className="space-y-6">
@@ -61,6 +66,18 @@ export default function TableauDeBordPage() {
       {inscriptions > 0 && (
         <Link href="/utilisateurs" className="block rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 hover:border-amber-400">
           {inscriptions} inscription{inscriptions > 1 ? "s" : ""} en attente de validation : attribuez un rôle pour activer le compte.
+        </Link>
+      )}
+      {(nbAnomalies > 0 || nbDepassements > 0) && (
+        <Link href="/ia" className="block rounded-lg border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-900 hover:border-olive-600">
+          Intelligence artificielle :{" "}
+          {[
+            nbAnomalies > 0 && `${nbAnomalies} anomalie(s) détectée(s) sur 30 jours`,
+            nbDepassements > 0 && `${nbDepassements} lot(s) risquent de dépasser la limite extra vierge d'ici ${evolution.data!.horizonJours} jours`,
+          ]
+            .filter(Boolean)
+            .join(", ")}
+          . Voir le détail.
         </Link>
       )}
       <Erreur message={erreur} />

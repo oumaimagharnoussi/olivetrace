@@ -69,6 +69,7 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/forgot-password` et `/reset-password` : mot de passe oublié, par un lien envoyé par e-mail (valable 1 heure)
 - `/` : tableau de bord (mis à jour chaque minute) : lots actifs, stock par cuve et en produits finis, alertes qualité et non-conformités ouvertes, expéditions en cours par destination
 - `/rapports` : rapports sur une période (campagne par défaut) avec graphiques et export CSV : réceptions par huilerie, variété et mois, ventes en vrac, mise en bouteille, exports par pays, client et mois (direction et administrateurs)
+- `/ia` : intelligence artificielle : qualité prévue du prochain lot de chaque huilerie, évolution de l'acidité et du peroxyde des lots en stock (délai avant la limite extra vierge), lots et formats recommandés pour un client, anomalies (analyses inhabituelles, quantités et dates incohérentes) ; la prévision s'affiche aussi dans le formulaire de réception
 - `/referentiels/huileries`, `/referentiels/varietes`, `/referentiels/stockages`, `/referentiels/clients` : liste, ajout, modification, désactivation
 - `/utilisateurs` : gestion des comptes (administrateur seulement)
 - `/stock` : état des cuves et citernes (lot contenu, remplissage, ancienneté) et alertes
@@ -195,3 +196,7 @@ npx puppeteer browsers install chrome
 ```
 
 ou indiquer le navigateur dans `api/.env`, par exemple `CHROME_PATH='C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'`, puis redémarrer l'API.
+
+## Intelligence artificielle
+
+Les modèles sont calculés par l'API (module `api/src/ia`), sans service à installer : ils apprennent à chaque réception et à chaque analyse saisies. Ce sont des statistiques robustes adaptées à un historique court (une campagne) : moyenne de l'huilerie rapprochée de la moyenne générale quand elle a peu de lots, écart absolu médian pour repérer les valeurs inhabituelles, tendance linéaire pour l'évolution en cuve. Chaque résultat indique sur combien de lots il repose. Avec plusieurs campagnes d'historique, un service Python (scikit-learn) pourra prendre le relais sans changer les écrans.
