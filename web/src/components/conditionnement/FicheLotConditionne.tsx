@@ -10,6 +10,7 @@ import { ORIGINES_LOT, type OrigineLot, date, kg } from "@/lib/vrac";
 import { BadgeQualite } from "../qualite/Badges";
 import { Carte, Erreur, Succes, Tableau, td } from "../vrac/ui";
 import { FormulaireMouvementProduit } from "./Formulaires";
+import { CartePasseport } from "./Passeport";
 import { TableauMouvements } from "./TableauMouvements";
 
 interface FicheData extends LotConditionne {
@@ -105,6 +106,8 @@ export function FicheLotConditionne({ id }: { id: number }) {
           ))}
         </dl>
       </Carte>
+
+      <CartePasseport lotId={lot.id} />
 
       <Carte titre="Traçabilité : lots vrac d'origine">
         <Tableau entetes={["Lot", "Étape", "Huilerie", "Variété", "Campagne"]} vide={lot.ascendance.length === 0}>

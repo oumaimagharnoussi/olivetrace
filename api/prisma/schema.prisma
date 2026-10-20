@@ -3,6 +3,7 @@
 // Étape 2 (flux vrac) : lots, analyses, opérations de stock (réception, transfert, assemblage, sortie), livraisons.
 // Étape 3 (qualité) : critères de qualité, résultat de chaque analyse, non-conformités et blocage des lots.
 // Étape 4 (conditionnement) : filtration, mise en bouteille (lots conditionnés) et stock de produits finis.
+// Étape 5 (passeport produit) : QR code de chaque lot conditionné et de chaque bouteille, page publique.
 
 generator client {
   provider     = "prisma-client"
@@ -484,6 +485,7 @@ model LotConditionne {
   createdAt       DateTime              @default(now())
 
   mouvements MouvementProduitFini[]
+  passeport  Passeport?
 
   @@index([lotVracId])
 }
@@ -506,4 +508,33 @@ model MouvementProduitFini {
 
   @@index([lotConditionneId])
   @@index([date])
+}
+
+// ---------------------------------------------------------------------------
+// Étape 5 : passeport produit (QR code)
+// ---------------------------------------------------------------------------
+// Règles :
+// - chaque lot conditionné a un passeport : une page publique, sans connexion, à l'adresse /p/{jeton} ;
+// - le jeton est tiré au hasard : on ne peut pas deviner l'adresse d'un autre lot à partir d'un numéro ;
+// - le QR code d'une bouteille ajoute son numéro (1 à nombre d'unités) et une signature, vérifiée à la lecture ;
+// - la page ne montre que ce qui est autorisé : jamais le client, les quantités, les opérateurs ni les notes internes,
+//   et chaque rubrique (huileries, analyses, procédé, destination) peut être masquée.
+
+model Passeport {
+  id                   Int            @id @default(autoincrement())
+  lotConditionneId     Int            @unique
+  lotConditionne       LotConditionne @relation(fields: [lotConditionneId], references: [id])
+  jeton                String         @unique @db.VarChar(32)
+  publie               Boolean        @default(true) // décoché, la page publique répond « passeport indisponible »
+  nomProduit           String?        @db.VarChar(160) // ex. Huile d'olive vierge extra OLIVED
+  description          String?        @db.Text
+  certifications       Json? // libellés affichés tels quels, ex. ["Agriculture biologique UE (TN-BIO-001)"]
+  afficherHuileries    Boolean        @default(true)
+  afficherAnalyses     Boolean        @default(true)
+  afficherProcede      Boolean        @default(true)
+  afficherDestination  Boolean        @default(true)
+  consultations        Int            @default(0)
+  derniereConsultation DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 }

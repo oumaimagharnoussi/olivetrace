@@ -35,7 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="border-b border-olive-900 bg-olive-900 text-olive-50 md:w-60 md:shrink-0 md:border-b-0">
+      <aside className="print:hidden border-b border-olive-900 bg-olive-900 text-olive-50 md:w-60 md:shrink-0 md:border-b-0">
         <div className="px-5 py-4 text-lg font-semibold">OliveTrace</div>
         {/* Le menu lit l'adresse de la page : dans un <Suspense> pour les pages à paramètre (ex. /lots/12). */}
         <Suspense>
@@ -43,7 +43,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </Suspense>
       </aside>
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-end gap-4 border-b border-stone-200 bg-white px-6 py-3 text-sm">
+        <header className="print:hidden flex items-center justify-end gap-4 border-b border-stone-200 bg-white px-6 py-3 text-sm">
           <span className="text-stone-700">
             {user.nom} · <span className="text-stone-500">{ROLE_LABELS[user.role]}</span>
           </span>
@@ -57,7 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             Se déconnecter
           </button>
         </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6 print:p-0">{children}</main>
       </div>
     </div>
   );
