@@ -14,7 +14,7 @@ const PAYS_ORIGINE = 'Tunisie';
 
 const NOMS_PAYS = new Intl.DisplayNames(['fr'], { type: 'region' });
 
-function nomPays(code: string | null) {
+export function nomPays(code: string | null) {
   if (!code) return null;
   try {
     return NOMS_PAYS.of(code) ?? code;
@@ -216,7 +216,7 @@ export class PasseportService {
   }
 
   /** Remonte les lots vrac (filtrations, assemblages) jusqu'aux réceptions : huileries, variétés, campagnes, filtrations. */
-  private async ascendance(lotId: number) {
+  async ascendance(lotId: number) {
     const huileries = new Map<string, { nom: string; region: string | null }>();
     const varietes = new Set<string>();
     const campagnes = new Set<string>();
