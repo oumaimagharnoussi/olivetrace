@@ -6,27 +6,46 @@ Plateforme de traçabilité de l'huile d'olive pour OLIVED.
 |---|---|---|
 | `api/` | Backend (API REST) | NestJS 12, TypeScript, Prisma 7, MySQL 8 |
 | `web/` | Frontend (back-office) | Next.js 16, React 19, Tailwind CSS 4 |
-| `docker-compose.yml` | Base MySQL locale | MySQL 8.4 |
 
 ## Démarrer en local
 
-Prérequis : Node.js 22+, Docker.
+Prérequis : Node.js 22+ et MySQL 8 installé sur le poste.
+
+### 1. Créer la base MySQL
+
+Dans MySQL Workbench ou en ligne de commande (`mysql -u root -p`), exécuter :
+
+```sql
+CREATE DATABASE olivetrace CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'olivetrace'@'localhost' IDENTIFIED BY 'olivetrace';
+-- Prisma Migrate crée une base temporaire (shadow database) en développement :
+-- l'utilisateur doit donc pouvoir créer des bases.
+GRANT ALL PRIVILEGES ON *.* TO 'olivetrace'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+Si vous gardez un autre utilisateur ou mot de passe, adaptez `DATABASE_URL` dans `api/.env`.
+
+### 2. Backend (http://localhost:3001/api)
 
 ```bash
-# 1. Base de données
-docker compose up -d mysql
-
-# 2. Backend (http://localhost:3001/api)
 cd api
-cp .env.example .env
+copy .env.example .env
 npm install
-npx prisma migrate dev     # crée les tables
-npx prisma db seed         # compte admin + exemples
+npx prisma migrate dev
+npx prisma db seed
 npm run start:dev
+```
 
-# 3. Frontend (http://localhost:3000)
-cd ../web
-cp .env.example .env.local
+`prisma migrate dev` crée les tables, `prisma db seed` ajoute le compte administrateur et quelques exemples. Sous macOS ou Linux, remplacer `copy` par `cp`.
+
+### 3. Frontend (http://localhost:3000)
+
+Dans un second terminal :
+
+```bash
+cd web
+copy .env.example .env.local
 npm install
 npm run dev
 ```
