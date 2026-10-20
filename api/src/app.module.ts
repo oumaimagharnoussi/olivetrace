@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ReferentielsModule } from './referentiels/referentiels.module.js';
 import { UsersModule } from './users/users.module.js';
+import { VracModule } from './vrac/vrac.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { UsersModule } from './users/users.module.js';
     AuthModule,
     UsersModule,
     ReferentielsModule,
+    VracModule,
   ],
   controllers: [AppController],
 })
