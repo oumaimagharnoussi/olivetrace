@@ -6,5 +6,6 @@ import { BlockchainService } from './blockchain.service.js';
 @Module({
   controllers: [BlockchainController],
   providers: [BlockchainService],
+  exports: [BlockchainService],
 })
 export class BlockchainModule {}

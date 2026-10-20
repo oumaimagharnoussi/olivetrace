@@ -17,6 +17,7 @@ export interface Passeport {
   afficherAnalyses: boolean;
   afficherProcede: boolean;
   afficherDestination: boolean;
+  afficherBlockchain: boolean;
   consultations: number;
   derniereConsultation: string | null;
   nombreUnites: number;
@@ -63,4 +64,21 @@ export interface PasseportPublic {
   } | null;
   destination: { pays: string | null; codePays: string | null; marche: string | null } | null;
   certifications: string[];
+  /** Étapes de fabrication et preuve de leur ancrage sur la blockchain (sans leur contenu). */
+  blockchain: {
+    etapes: {
+      etape: string;
+      date: string;
+      intact: boolean;
+      scelle: boolean;
+      ancre: boolean;
+      reseau: string | null;
+      bloc: { numero: number | null; date: string | null } | null;
+      empreinteAncrage: string | null;
+      txHash: string | null;
+      lien: string | null;
+    }[];
+    toutesAncrees: boolean;
+    intact: boolean;
+  } | null;
 }

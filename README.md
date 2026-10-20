@@ -86,7 +86,7 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/produits-finis` : stock de bouteilles par format et par lot, expéditions, casse et ajustements
 - `/referentiels/formats` : formats de bouteille et de bidon
 - `/conditionnement/{id}/etiquettes` : impression du QR code du lot ou d'une planche d'étiquettes, une par bouteille
-- `/p/{jeton}` : passeport produit public, ouvert en scannant le QR code (sans connexion)
+- `/p/{jeton}` : passeport produit public, ouvert en scannant le QR code (sans connexion) ; il montre aussi la preuve d'ancrage blockchain de chaque étape (réception, filtration, analyses, mise en bouteille), sans leur contenu
 - `/expeditions` : expéditions export (client, pays de destination, incoterm, transport, lots conditionnés)
 - `/expeditions/{id}` : fiche d'une expédition, départ et livraison, téléchargement du dossier export en PDF
 
