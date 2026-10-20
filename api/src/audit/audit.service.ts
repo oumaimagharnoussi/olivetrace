@@ -29,7 +29,7 @@ export class AuditService {
     return this.prisma.auditLog.findMany({
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 500),
-      include: { user: { select: { id: true, nom: true, email: true } } },
+      include: { user: { select: { id: true, nom: true, email: true } }, ancrage: { select: { id: true, statut: true } } },
     });
   }
 }

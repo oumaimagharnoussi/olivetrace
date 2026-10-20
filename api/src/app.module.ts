@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
 import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { BlockchainModule } from './blockchain/blockchain.module.js';
 import { ConditionnementModule } from './conditionnement/conditionnement.module.js';
 import { ExportModule } from './export/export.module.js';
 import { IaModule } from './ia/ia.module.js';
@@ -31,6 +32,7 @@ import { VracModule } from './vrac/vrac.module.js';
     ExportModule,
     TableauDeBordModule,
     IaModule,
+    BlockchainModule,
   ],
   controllers: [AppController],
 })
