@@ -53,7 +53,10 @@ export class LotsService {
         analyses: { orderBy: [{ dateAnalyse: 'desc' }, { id: 'desc' }] },
         nonConformites: { orderBy: { createdAt: 'desc' }, include: { ouvertePar: { select: { nom: true } }, clotureePar: { select: { nom: true } } } },
         origines: { include: { parent: { select: { id: true, code: true } } } },
-        enfants: { include: { lot: { select: { id: true, code: true, dateReception: true } } } },
+        enfants: { include: { lot: { select: { id: true, code: true, origine: true, dateReception: true } } } },
+        filtration: { include: { lotEntree: { select: { id: true, code: true } } } },
+        filtrations: { include: { lotSortie: { select: { id: true, code: true } } }, orderBy: { id: 'desc' } },
+        lotsConditionnes: { include: { format: { select: { nom: true, contenanceMl: true } } }, orderBy: { id: 'desc' } },
         mouvements: {
           orderBy: [{ operation: { date: 'desc' } }, { id: 'desc' }],
           include: {

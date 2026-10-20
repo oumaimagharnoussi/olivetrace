@@ -10,8 +10,10 @@ import {
   type Analyse,
   type Livraison,
   type Lot,
+  type OrigineLot,
   type MotifSortie,
   MOTIFS_SORTIE,
+  ORIGINES_LOT,
   ROLES_ANALYSE,
   STATUTS_LIVRAISON,
   TYPES_OPERATION,
@@ -31,7 +33,9 @@ interface FicheLotData extends Omit<Lot, "derniereAnalyse"> {
   nonConformites: NonConformite[];
   cuves: { stockageId: number; code: string; quantiteKg: number }[];
   origines: { quantiteKg: number; parent: { id: number; code: string } }[];
-  enfants: { quantiteKg: number; lot: { id: number; code: string; dateReception: string } }[];
+  enfants: { quantiteKg: number; lot: { id: number; code: string; origine: OrigineLot; dateReception: string } }[];
+  filtration: { id: number; code: string; operateur: string; lotEntree: { id: number; code: string } } | null;
+  lotsConditionnes: { id: number; code: string; nombreUnites: number; quantiteKg: number; format: { nom: string } }[];
   mouvements: {
     id: number;
     quantiteKg: number;
@@ -59,11 +63,11 @@ export function FicheLot({ id }: { id: number }) {
   if (!lot) return <p className="text-stone-500">Chargement…</p>;
 
   const infos: [string, React.ReactNode][] = [
-    ["Origine", lot.origine === "ASSEMBLAGE" ? "Assemblage" : "Réception"],
+    ["Origine", ORIGINES_LOT[lot.origine]],
     ["Huilerie", lot.huilerie?.nom ?? "—"],
     ["Variété", lot.variete?.nom ?? (lot.origine === "ASSEMBLAGE" ? "Plusieurs variétés" : "—")],
     ["Campagne", lot.campagne ?? "—"],
-    [lot.origine === "ASSEMBLAGE" ? "Assemblé le" : "Reçu le", date(lot.dateReception)],
+    [{ RECEPTION: "Reçu le", ASSEMBLAGE: "Assemblé le", FILTRATION: "Filtré le" }[lot.origine], date(lot.dateReception)],
     ["Quantité initiale", kg(lot.quantiteInitialeKg)],
     ["En stock", lot.stockKg > 0 ? kg(lot.stockKg) : "Épuisé"],
     ["Cuves", lot.cuves.length ? lot.cuves.map((c) => `${c.code} (${kg(c.quantiteKg)})`).join(", ") : "—"],
@@ -71,6 +75,8 @@ export function FicheLot({ id }: { id: number }) {
     ["Catégorie visée", CATEGORIES[lot.categorieVisee]],
     ["Qualité", <BadgeQualite key="q" statut={lot.statutQualite} bloque={lot.bloque} />],
   ];
+  // Un lot filtré sans analyse reprend la qualité du lot qu'il a filtré.
+  const qualiteHeritee = lot.filtration && lot.analyses.length === 0;
   const ncOuvertes = lot.nonConformites.filter((nc) => nc.statut !== "CLOTUREE");
 
   return (
@@ -87,6 +93,24 @@ export function FicheLot({ id }: { id: number }) {
         <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           Lot bloqué par {ncOuvertes.length > 1 ? `${ncOuvertes.length} non-conformités ouvertes` : `la non-conformité ${ncOuvertes[0]?.code ?? ""}`} :
           vente et envoi au conditionnement impossibles jusqu&apos;à sa clôture.
+        </p>
+      )}
+      {lot.bloque && ncOuvertes.length === 0 && lot.filtration && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Lot bloqué parce que le lot filtré{" "}
+          <Link href={`/lots/${lot.filtration.lotEntree.id}`} className="underline">
+            {lot.filtration.lotEntree.code}
+          </Link>{" "}
+          a une non-conformité ouverte.
+        </p>
+      )}
+      {qualiteHeritee && (
+        <p className="rounded-md bg-stone-100 px-4 py-3 text-sm text-stone-700">
+          Lot filtré ({lot.filtration!.code}, opérateur {lot.filtration!.operateur}) : sans analyse propre, il reprend la qualité du lot{" "}
+          <Link href={`/lots/${lot.filtration!.lotEntree.id}`} className="text-olive-700 hover:underline">
+            {lot.filtration!.lotEntree.code}
+          </Link>
+          .
         </p>
       )}
       {message && <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900">{message}</p>}
@@ -122,20 +146,35 @@ export function FicheLot({ id }: { id: number }) {
             )}
             {lot.enfants.length > 0 && (
               <div>
-                <div className="mb-1 text-stone-500">Utilisé dans les assemblages</div>
+                <div className="mb-1 text-stone-500">Utilisé dans les assemblages et filtrations</div>
                 <ul className="space-y-1">
                   {lot.enfants.map((e) => (
                     <li key={e.lot.id}>
                       <Link href={`/lots/${e.lot.id}`} className="text-olive-700 hover:underline">
                         {e.lot.code}
                       </Link>{" "}
-                      : {kg(e.quantiteKg)} le {date(e.lot.dateReception)}
+                      : {kg(e.quantiteKg)} le {date(e.lot.dateReception)} ({ORIGINES_LOT[e.lot.origine].toLowerCase()})
                     </li>
                   ))}
                 </ul>
               </div>
             )}
           </div>
+        </Carte>
+      )}
+
+      {lot.lotsConditionnes.length > 0 && (
+        <Carte titre="Mises en bouteille">
+          <ul className="space-y-1 text-sm">
+            {lot.lotsConditionnes.map((c) => (
+              <li key={c.id}>
+                <Link href={`/conditionnement/${c.id}`} className="text-olive-700 hover:underline">
+                  {c.code}
+                </Link>{" "}
+                : {nombre(c.nombreUnites)} × {c.format.nom} ({kg(c.quantiteKg)})
+              </li>
+            ))}
+          </ul>
         </Carte>
       )}
 

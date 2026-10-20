@@ -120,25 +120,29 @@ export interface LotAExpedier {
 }
 
 /**
- * Contrôle avant une vente ou un envoi au conditionnement.
+ * Contrôle avant une vente, une filtration ou une mise en bouteille.
  * Les blocages empêchent la sortie ; les avertissements sont affichés pour information.
+ * Pour le conditionnement (`conditionnement: true`), le lot doit en plus être analysé et conforme.
  */
 export function controlerExpedition(
   lot: LotAExpedier,
   cahiersDesCharges: { nom: string; criteres: Critere[] }[],
-  options: { maintenant: Date; ageMaxAnalyseJours: number },
+  options: { maintenant: Date; ageMaxAnalyseJours: number; conditionnement?: boolean },
 ) {
   const blocages: string[] = [];
   const avertissements: string[] = [];
+  const strict = options.conditionnement ?? false;
 
   if (lot.bloque) blocages.push(`Le lot ${lot.code} est bloqué par une non-conformité ouverte.`);
 
   const analyse = lot.derniereAnalyse;
   if (!analyse) {
-    avertissements.push(`Le lot ${lot.code} n'a aucune analyse de laboratoire.`);
+    if (strict) blocages.push(`Le lot ${lot.code} doit être analysé avant le conditionnement.`);
+    else avertissements.push(`Le lot ${lot.code} n'a aucune analyse de laboratoire.`);
   } else {
     if (lot.statutQualite === 'NON_CONFORME' && !lot.bloque) {
-      avertissements.push(`La dernière analyse du lot ${lot.code} n'est pas conforme à la catégorie visée.`);
+      if (strict) blocages.push(`La dernière analyse du lot ${lot.code} n'est pas conforme à la catégorie visée : il ne peut pas être conditionné.`);
+      else avertissements.push(`La dernière analyse du lot ${lot.code} n'est pas conforme à la catégorie visée.`);
     }
     if (lot.statutQualite === 'INCOMPLET') {
       avertissements.push(`La dernière analyse du lot ${lot.code} ne mesure pas tous les paramètres de la catégorie visée.`);

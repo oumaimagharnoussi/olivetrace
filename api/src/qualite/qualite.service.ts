@@ -100,18 +100,42 @@ export class QualiteService {
     return { analyse, nonConformite, evaluation };
   }
 
-  /** Statut qualité (dernière analyse, comparée aux critères actuels) et blocage (non-conformité ouverte) du lot. */
+  /**
+   * Lot et analyse qui font foi pour la qualité d'un lot : sa dernière analyse,
+   * ou, pour un lot filtré qui n'a pas encore la sienne, celle du lot qu'il a filtré.
+   */
+  async sourceQualite(db: Db, lotId: number) {
+    const include = {
+      analyses: { orderBy: [{ dateAnalyse: 'desc' as const }, { id: 'desc' as const }], take: 1 },
+      filtration: { select: { lotEntreeId: true } },
+    };
+    const lot = await db.lot.findUnique({ where: { id: lotId }, include });
+    if (!lot) throw new NotFoundException('Lot introuvable');
+    let reference = lot;
+    while (!reference.analyses.length && reference.filtration) {
+      reference = await db.lot.findUniqueOrThrow({ where: { id: reference.filtration.lotEntreeId }, include });
+    }
+    return { lot, reference, analyse: reference.analyses[0] ?? null };
+  }
+
+  /**
+   * Statut qualité (dernière analyse, comparée aux critères actuels) et blocage (non-conformité ouverte) du lot.
+   * Un lot filtré est aussi bloqué si son lot d'entrée l'est ; les lots filtrés à partir de ce lot sont mis à jour.
+   */
   async majLot(tx: Prisma.TransactionClient, lotId: number) {
-    const lot = await tx.lot.findUniqueOrThrow({
-      where: { id: lotId },
-      select: { categorieVisee: true, analyses: { orderBy: [{ dateAnalyse: 'desc' }, { id: 'desc' }], take: 1 } },
-    });
-    const derniere = lot.analyses[0];
-    const statutQualite = derniere
-      ? evaluerPourLot(valeursAnalyse(derniere), lot.categorieVisee, await this.criteresParCategorie(tx)).resultat
+    const { lot, analyse } = await this.sourceQualite(tx, lotId);
+    const statutQualite = analyse
+      ? evaluerPourLot(valeursAnalyse(analyse), lot.categorieVisee, await this.criteresParCategorie(tx)).resultat
       : 'NON_ANALYSE';
     const ouvertes = await tx.nonConformite.count({ where: { lotId, statut: { not: 'CLOTUREE' } } });
-    return tx.lot.update({ where: { id: lotId }, data: { statutQualite, bloque: ouvertes > 0 } });
+    const entreeBloquee = lot.filtration
+      ? (await tx.lot.findUniqueOrThrow({ where: { id: lot.filtration.lotEntreeId }, select: { bloque: true } })).bloque
+      : false;
+    const maj = await tx.lot.update({ where: { id: lotId }, data: { statutQualite, bloque: ouvertes > 0 || entreeBloquee } });
+
+    const filtres = await tx.filtration.findMany({ where: { lotEntreeId: lotId }, select: { lotSortieId: true } });
+    for (const f of filtres) await this.majLot(tx, f.lotSortieId);
+    return maj;
   }
 
   /** Code suivant pour l'année : NC2026-0001, NC2026-0002… */
@@ -133,24 +157,25 @@ export class QualiteService {
 
   // --- Contrôle avant expédition ---------------------------------------------------------------
 
-  /** Contrôle d'un lot avant une vente (avec le cahier des charges du client) ou un envoi au conditionnement. */
-  async controleExpedition(lotId: number, clientId?: number) {
-    const [lot, cahiers] = await Promise.all([
-      this.prisma.lot.findUnique({ where: { id: lotId }, include: { analyses: { orderBy: [{ dateAnalyse: 'desc' }, { id: 'desc' }], take: 1 } } }),
+  /**
+   * Contrôle d'un lot avant une vente (avec le cahier des charges du client), une filtration ou une mise en bouteille.
+   * Pour le conditionnement, le lot doit être analysé et conforme, en plus de ne pas être bloqué.
+   */
+  async controleExpedition(lotId: number, clientId?: number, conditionnement = false) {
+    const [{ lot, analyse }, cahiers] = await Promise.all([
+      this.sourceQualite(this.prisma, lotId),
       clientId ? this.prisma.specification.findMany({ where: { clientId, actif: true }, include: { criteres: true } }) : [],
     ]);
-    if (!lot) throw new NotFoundException('Lot introuvable');
-    const derniere = lot.analyses[0];
     return controlerExpedition(
       {
         code: lot.code,
         bloque: lot.bloque,
         statutQualite: lot.statutQualite,
         categorieVisee: lot.categorieVisee,
-        derniereAnalyse: derniere ? { dateAnalyse: derniere.dateAnalyse, valeurs: valeursAnalyse(derniere) } : null,
+        derniereAnalyse: analyse ? { dateAnalyse: analyse.dateAnalyse, valeurs: valeursAnalyse(analyse) } : null,
       },
       cahiers.map((c) => ({ nom: c.nom, criteres: versCriteres(c.criteres) })),
-      { maintenant: new Date(), ageMaxAnalyseJours: this.ageMaxAnalyseJours() },
+      { maintenant: new Date(), ageMaxAnalyseJours: this.ageMaxAnalyseJours(), conditionnement },
     );
   }
 

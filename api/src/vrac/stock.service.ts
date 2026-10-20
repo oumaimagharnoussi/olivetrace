@@ -127,7 +127,6 @@ export class StockService {
     const enStock = [...stock].filter(([, q]) => q > 0).map(([id]) => id);
     const lots = await this.prisma.lot.findMany({
       where: { id: { in: enStock } },
-      include: { _count: { select: { analyses: true } } },
       orderBy: { dateReception: 'asc' },
     });
     const maintenant = new Date();
@@ -144,7 +143,7 @@ export class StockService {
           message: `Lot ${lot.code} en stock depuis ${jours} jours (seuil : ${dureeMax} jours).`,
         });
       }
-      if (lot._count.analyses === 0) {
+      if (lot.statutQualite === 'NON_ANALYSE') {
         alertes.push({
           niveau: 'INFO',
           type: 'SANS_ANALYSE',

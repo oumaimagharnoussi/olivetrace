@@ -16,13 +16,14 @@ export class QualiteController {
     return this.qualite.alertes();
   }
 
-  /** Contrôle d'un lot avant une vente (avec le cahier des charges du client) ou un envoi au conditionnement. */
+  /** Contrôle d'un lot avant une vente (avec le cahier des charges du client), une filtration ou une mise en bouteille. */
   @Get('controle-expedition')
   controleExpedition(
     @Query('lotId', ParseIntPipe) lotId: number,
     @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
+    @Query('conditionnement', new ParseBoolPipe({ optional: true })) conditionnement?: boolean,
   ) {
-    return this.qualite.controleExpedition(lotId, clientId);
+    return this.qualite.controleExpedition(lotId, clientId, conditionnement);
   }
 
   @Get('specifications')

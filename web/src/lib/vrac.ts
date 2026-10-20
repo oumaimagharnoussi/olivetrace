@@ -36,7 +36,7 @@ export interface Analyse {
 export interface Lot {
   id: number;
   code: string;
-  origine: "RECEPTION" | "ASSEMBLAGE";
+  origine: OrigineLot;
   huilerie: Ref | null;
   variete: Ref | null;
   campagne: string | null;
@@ -110,7 +110,8 @@ export interface Operation {
   mouvements: Mouvement[];
 }
 
-export type TypeOperation = "RECEPTION" | "TRANSFERT" | "ASSEMBLAGE" | "SORTIE";
+export type OrigineLot = "RECEPTION" | "ASSEMBLAGE" | "FILTRATION";
+export type TypeOperation = "RECEPTION" | "TRANSFERT" | "ASSEMBLAGE" | "SORTIE" | "FILTRATION" | "CONDITIONNEMENT";
 export type MotifSortie = "VENTE" | "CONDITIONNEMENT" | "PERTE" | "AUTRE";
 export type StatutLivraison = "PLANIFIEE" | "EN_COURS" | "LIVREE" | "ANNULEE";
 
@@ -119,11 +120,19 @@ export const TYPES_OPERATION: Record<TypeOperation, string> = {
   TRANSFERT: "Transfert",
   ASSEMBLAGE: "Assemblage",
   SORTIE: "Sortie",
+  FILTRATION: "Filtration",
+  CONDITIONNEMENT: "Mise en bouteille",
+};
+
+export const ORIGINES_LOT: Record<OrigineLot, string> = {
+  RECEPTION: "Réception",
+  ASSEMBLAGE: "Assemblage",
+  FILTRATION: "Filtration",
 };
 
 export const MOTIFS_SORTIE: Record<MotifSortie, string> = {
   VENTE: "Vente en vrac",
-  CONDITIONNEMENT: "Envoi au conditionnement",
+  CONDITIONNEMENT: "Envoi au conditionnement (ancien)",
   PERTE: "Perte / écart",
   AUTRE: "Autre",
 };

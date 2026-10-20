@@ -7,7 +7,7 @@ import { FormulaireReception } from "@/components/vrac/FormulaireReception";
 import { Carte, Erreur, Succes, Tableau, td } from "@/components/vrac/ui";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/useApi";
-import { type Lot, ROLES_STOCK, date, kg, nombre } from "@/lib/vrac";
+import { type Lot, ORIGINES_LOT, ROLES_STOCK, date, kg, nombre } from "@/lib/vrac";
 
 export default function LotsPage() {
   const { can } = useAuth();
@@ -67,7 +67,7 @@ export default function LotsPage() {
                   {l.code}
                 </Link>
               </td>
-              <td className={td}>{l.origine === "ASSEMBLAGE" ? "Assemblage" : "Réception"}</td>
+              <td className={td}>{ORIGINES_LOT[l.origine]}</td>
               <td className={td}>{l.huilerie?.nom ?? "—"}</td>
               <td className={td}>{l.variete?.nom ?? "—"}</td>
               <td className={td}>{l.campagne ?? "—"}</td>
