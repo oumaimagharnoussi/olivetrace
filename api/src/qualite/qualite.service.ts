@@ -31,7 +31,7 @@ export function valeursAnalyse(analyse: Partial<Record<ChampAnalyse, Prisma.Deci
   return Object.fromEntries(CHAMPS.map((c) => [c, analyse[c] == null ? null : Number(analyse[c])]));
 }
 
-function versCriteres(criteres: { parametre: Critere['parametre']; min: Prisma.Decimal | null; max: Prisma.Decimal | null }[]): Critere[] {
+export function versCriteres(criteres: { parametre: Critere['parametre']; min: Prisma.Decimal | null; max: Prisma.Decimal | null }[]): Critere[] {
   return criteres.map((c) => ({ parametre: c.parametre, min: c.min == null ? null : Number(c.min), max: c.max == null ? null : Number(c.max) }));
 }
 

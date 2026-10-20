@@ -5,6 +5,7 @@ import { AuditModule } from './audit/audit.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ConditionnementModule } from './conditionnement/conditionnement.module.js';
 import { ExportModule } from './export/export.module.js';
+import { IaModule } from './ia/ia.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { PasseportModule } from './passeport/passeport.module.js';
 import { QualiteModule } from './qualite/qualite.module.js';
@@ -29,6 +30,7 @@ import { VracModule } from './vrac/vrac.module.js';
     PasseportModule,
     ExportModule,
     TableauDeBordModule,
+    IaModule,
   ],
   controllers: [AppController],
 })

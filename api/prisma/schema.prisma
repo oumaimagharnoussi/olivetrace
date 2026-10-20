@@ -6,6 +6,7 @@
 // Étape 5 (passeport produit) : QR code de chaque lot conditionné et de chaque bouteille, page publique.
 // Étape 6 (export) : expéditions de produits finis et documents PDF du dossier export.
 // Étape 7 (tableau de bord et rapports) : pas de nouvelle table, tout est calculé à partir des données existantes.
+// Étape 8 (intelligence artificielle) : pas de nouvelle table, les modèles sont recalculés sur l'historique (api/src/ia).
 
 generator client {
   provider     = "prisma-client"
