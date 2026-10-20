@@ -82,6 +82,19 @@ Les boutons d'ajout et de modification n'apparaissent que pour les rôles autori
 
 Les inscriptions (prévenir les administrateurs) et le mot de passe oublié envoient des e-mails. Tant que `SMTP_HOST` est vide dans `api/.env`, ils ne partent pas : ils s'affichent dans le terminal de l'API, avec le lien à ouvrir. Pour un vrai envoi, renseigner `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` et `SMTP_FROM`.
 
+Exemple avec Gmail (il faut un « mot de passe d'application » Google, voir https://myaccount.google.com/apppasswords, la validation en deux étapes doit être activée) :
+
+```
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER="votre.adresse@gmail.com"
+SMTP_PASSWORD="abcdefghijklmnop"
+SMTP_FROM="OliveTrace <votre.adresse@gmail.com>"
+```
+
+`api/.env` n'est jamais versionné (il est dans `.gitignore`) : ne pas y mettre de mot de passe dans un autre fichier.
+
 ## Ce que contient déjà l'API
 
 - Connexion par email et mot de passe (JWT) : `POST /api/auth/login`, `GET /api/auth/me`
