@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { CATEGORIES, type NonConformite, ROLES_QUALITE, decrireEcart } from "@/lib/qualite";
 import { useApi } from "@/lib/useApi";
 import {
   type Analyse,
@@ -20,11 +21,14 @@ import {
   kg,
   nombre,
 } from "@/lib/vrac";
+import { BadgeCategorie, BadgeQualite } from "../qualite/Badges";
+import { FormulaireNonConformite, TableauNonConformites } from "../qualite/NonConformites";
 import { ChampsAnalyse, analyseVersApi, analyseVide } from "./ChampsAnalyse";
 import { Carte, Erreur, Tableau, td } from "./ui";
 
 interface FicheLotData extends Omit<Lot, "derniereAnalyse"> {
   analyses: Analyse[];
+  nonConformites: NonConformite[];
   cuves: { stockageId: number; code: string; quantiteKg: number }[];
   origines: { quantiteKg: number; parent: { id: number; code: string } }[];
   enfants: { quantiteKg: number; lot: { id: number; code: string; dateReception: string } }[];
@@ -48,6 +52,8 @@ export function FicheLot({ id }: { id: number }) {
   const { can } = useAuth();
   const { data: lot, erreur, recharger } = useApi<FicheLotData>(`/lots/${id}`);
   const [saisieAnalyse, setSaisieAnalyse] = useState(false);
+  const [saisieNc, setSaisieNc] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
 
   if (erreur) return <Erreur message={erreur} />;
   if (!lot) return <p className="text-stone-500">Chargement…</p>;
@@ -62,7 +68,10 @@ export function FicheLot({ id }: { id: number }) {
     ["En stock", lot.stockKg > 0 ? kg(lot.stockKg) : "Épuisé"],
     ["Cuves", lot.cuves.length ? lot.cuves.map((c) => `${c.code} (${kg(c.quantiteKg)})`).join(", ") : "—"],
     ["N° de bon", lot.numeroBon ?? "—"],
+    ["Catégorie visée", CATEGORIES[lot.categorieVisee]],
+    ["Qualité", <BadgeQualite key="q" statut={lot.statutQualite} bloque={lot.bloque} />],
   ];
+  const ncOuvertes = lot.nonConformites.filter((nc) => nc.statut !== "CLOTUREE");
 
   return (
     <div className="space-y-6">
@@ -73,6 +82,14 @@ export function FicheLot({ id }: { id: number }) {
         <h1 className="text-2xl font-semibold text-stone-900">Lot {lot.code}</h1>
         {lot.notes && <p className="text-stone-500">{lot.notes}</p>}
       </div>
+
+      {lot.bloque && (
+        <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Lot bloqué par {ncOuvertes.length > 1 ? `${ncOuvertes.length} non-conformités ouvertes` : `la non-conformité ${ncOuvertes[0]?.code ?? ""}`} :
+          vente et envoi au conditionnement impossibles jusqu&apos;à sa clôture.
+        </p>
+      )}
+      {message && <p className="rounded-md bg-amber-50 px-4 py-3 text-sm text-amber-900">{message}</p>}
 
       <Carte>
         <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
@@ -136,14 +153,32 @@ export function FicheLot({ id }: { id: number }) {
         {saisieAnalyse && (
           <FormulaireAnalyse
             lotId={lot.id}
-            onFin={(enregistre) => {
+            onFin={(resultat) => {
               setSaisieAnalyse(false);
-              if (enregistre) recharger();
+              if (resultat) {
+                setMessage(resultat.nonConformite ? `Analyse non conforme : non-conformité ${resultat.nonConformite.code} ouverte, le lot est bloqué.` : null);
+                recharger();
+              }
             }}
           />
         )}
         <Tableau
-          entetes={["Date", "Laboratoire", "Bulletin", "Acidité %", "Peroxyde", "K232", "K270", "ΔK", "Polyphénols", "Commentaire"]}
+          entetes={[
+            "Date",
+            "Laboratoire",
+            "Bulletin",
+            "Acidité %",
+            "Peroxyde",
+            "K232",
+            "K270",
+            "ΔK",
+            "Polyphénols",
+            "Esters éth.",
+            "Défaut / fruité",
+            "Catégorie",
+            "Résultat",
+            "Commentaire",
+          ]}
           vide={lot.analyses.length === 0}
         >
           {lot.analyses.map((a) => (
@@ -157,10 +192,48 @@ export function FicheLot({ id }: { id: number }) {
               <td className={td}>{nombre(a.k270)}</td>
               <td className={td}>{nombre(a.deltaK)}</td>
               <td className={td}>{nombre(a.polyphenols)}</td>
+              <td className={td}>{nombre(a.esterEthyliques)}</td>
+              <td className={td}>
+                {a.medianeDefaut === null && a.medianeFruite === null ? "—" : `${nombre(a.medianeDefaut)} / ${nombre(a.medianeFruite)}`}
+              </td>
+              <td className={td}>
+                <BadgeCategorie categorie={a.categorie} />
+              </td>
+              <td className={td}>
+                {a.resultat ? <BadgeQualite statut={a.resultat} /> : "—"}
+                {a.ecarts?.map((e) => (
+                  <div key={e.parametre} className="whitespace-nowrap text-xs text-red-700">
+                    {decrireEcart(e)}
+                  </div>
+                ))}
+              </td>
               <td className={td}>{a.commentaire ?? "—"}</td>
             </tr>
           ))}
         </Tableau>
+      </Carte>
+
+      <Carte
+        titre="Non-conformités"
+        actions={
+          can(ROLES_QUALITE) &&
+          !saisieNc && (
+            <button className="btn-secondary" onClick={() => setSaisieNc(true)}>
+              Déclarer une non-conformité
+            </button>
+          )
+        }
+      >
+        {saisieNc && (
+          <FormulaireNonConformite
+            lotId={lot.id}
+            onFin={(enregistre) => {
+              setSaisieNc(false);
+              if (enregistre) recharger();
+            }}
+          />
+        )}
+        <TableauNonConformites nonConformites={lot.nonConformites} avecLot={false} onModifie={recharger} />
       </Carte>
 
       <Carte titre="Mouvements">
@@ -193,7 +266,9 @@ export function FicheLot({ id }: { id: number }) {
   );
 }
 
-function FormulaireAnalyse({ lotId, onFin }: { lotId: number; onFin: (enregistre: boolean) => void }) {
+type ResultatAnalyse = { nonConformite: { code: string } | null };
+
+function FormulaireAnalyse({ lotId, onFin }: { lotId: number; onFin: (resultat: ResultatAnalyse | null) => void }) {
   const [valeurs, setValeurs] = useState(() => analyseVide(aujourdhui()));
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
@@ -203,8 +278,7 @@ function FormulaireAnalyse({ lotId, onFin }: { lotId: number; onFin: (enregistre
     setEnvoi(true);
     setErreur(null);
     try {
-      await api(`/lots/${lotId}/analyses`, { method: "POST", body: analyseVersApi(valeurs) });
-      onFin(true);
+      onFin(await api<ResultatAnalyse>(`/lots/${lotId}/analyses`, { method: "POST", body: analyseVersApi(valeurs) }));
     } catch (e) {
       setErreur((e as Error).message);
     } finally {
@@ -220,7 +294,7 @@ function FormulaireAnalyse({ lotId, onFin }: { lotId: number; onFin: (enregistre
         <button type="submit" disabled={envoi} className="btn-primary">
           {envoi ? "Enregistrement…" : "Enregistrer l'analyse"}
         </button>
-        <button type="button" onClick={() => onFin(false)} className="btn-secondary">
+        <button type="button" onClick={() => onFin(null)} className="btn-secondary">
           Annuler
         </button>
       </div>

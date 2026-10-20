@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { BadgeQualite } from "@/components/qualite/Badges";
 import { FormulaireReception } from "@/components/vrac/FormulaireReception";
-import { Carte, Erreur, Tableau, td } from "@/components/vrac/ui";
+import { Carte, Erreur, Succes, Tableau, td } from "@/components/vrac/ui";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/useApi";
 import { type Lot, ROLES_STOCK, date, kg, nombre } from "@/lib/vrac";
@@ -12,6 +13,7 @@ export default function LotsPage() {
   const { can } = useAuth();
   const [enStock, setEnStock] = useState(true);
   const [reception, setReception] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   const lots = useApi<Lot[]>(`/lots${enStock ? "?enStock=true" : ""}`);
 
   return (
@@ -19,7 +21,13 @@ export default function LotsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-stone-900">Lots</h1>
         {can(ROLES_STOCK) && !reception && (
-          <button onClick={() => setReception(true)} className="btn-primary">
+          <button
+            onClick={() => {
+              setReception(true);
+              setMessage(null);
+            }}
+            className="btn-primary"
+          >
             Nouvelle réception
           </button>
         )}
@@ -28,13 +36,15 @@ export default function LotsPage() {
       {reception && (
         <FormulaireReception
           onAnnuler={() => setReception(false)}
-          onEnregistre={() => {
+          onEnregistre={(m) => {
             setReception(false);
+            setMessage(m);
             lots.recharger();
           }}
         />
       )}
 
+      <Succes message={message} />
       <Erreur message={lots.erreur} />
 
       <Carte
@@ -47,7 +57,7 @@ export default function LotsPage() {
         }
       >
         <Tableau
-          entetes={["Lot", "Origine", "Huilerie", "Variété", "Campagne", "Reçu le", "Reçu", "En stock", "Acidité"]}
+          entetes={["Lot", "Origine", "Huilerie", "Variété", "Campagne", "Reçu le", "Reçu", "En stock", "Acidité", "Qualité"]}
           vide={lots.data?.length === 0}
         >
           {lots.data?.map((l) => (
@@ -65,6 +75,9 @@ export default function LotsPage() {
               <td className={td}>{kg(l.quantiteInitialeKg)}</td>
               <td className={td}>{l.stockKg > 0 ? kg(l.stockKg) : <span className="text-stone-400">Épuisé</span>}</td>
               <td className={td}>{l.derniereAnalyse?.acidite != null ? `${nombre(l.derniereAnalyse.acidite)} %` : "—"}</td>
+              <td className={td}>
+                <BadgeQualite statut={l.statutQualite} bloque={l.bloque} />
+              </td>
             </tr>
           ))}
         </Tableau>

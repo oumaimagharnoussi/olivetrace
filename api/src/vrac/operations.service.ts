@@ -3,6 +3,8 @@ import { AuditService } from '../audit/audit.service.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { TypeOperation } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { rang } from '../qualite/regles.js';
+import { QualiteService } from '../qualite/qualite.service.js';
 import { prochainCodeLot } from './lots.service.js';
 import { controlerAssemblage } from './regles.js';
 import { StockService } from './stock.service.js';
@@ -22,6 +24,7 @@ export class OperationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stock: StockService,
+    private readonly qualite: QualiteService,
     private readonly audit: AuditService,
   ) {}
 
@@ -59,7 +62,7 @@ export class OperationsService {
 
     const lots = await this.prisma.lot.findMany({
       where: { id: { in: [...parLot.keys()] } },
-      include: { variete: { select: { id: true, nom: true } }, analyses: { orderBy: { dateAnalyse: 'desc' }, take: 1 } },
+      include: { variete: { select: { id: true, nom: true } }, analyses: { orderBy: [{ dateAnalyse: 'desc' }, { id: 'desc' }], take: 1 } },
     });
     if (lots.length !== parLot.size) throw new BadRequestException('Lot introuvable.');
 
@@ -72,6 +75,13 @@ export class OperationsService {
         acidite: l.analyses[0]?.acidite == null ? null : Number(l.analyses[0].acidite),
       })),
     );
+    const bloques = lots.filter((l) => l.bloque);
+    if (bloques.length) {
+      controle.avertissements.push(
+        `Lot${bloques.length > 1 ? 's' : ''} bloqué${bloques.length > 1 ? 's' : ''} par une non-conformité (${bloques.map((l) => l.code).join(', ')}) : ` +
+          "pensez à clôturer la non-conformité (décision « assemblage correctif ») et à analyser le nouveau lot.",
+      );
+    }
     return { ...controle, lots, parLot };
   }
 
@@ -92,6 +102,8 @@ export class OperationsService {
           varieteId: varietes.size === 1 ? [...varietes][0] : null,
           campagne: campagnes.size === 1 ? [...campagnes][0] : null,
           huilerieId: huileries.size === 1 ? [...huileries][0] : null,
+          // Par défaut, la moins bonne catégorie visée des lots d'origine. Le nouveau lot devra être analysé.
+          categorieVisee: dto.categorieVisee ?? lots.map((l) => l.categorieVisee).sort((a, b) => rang(b) - rang(a))[0],
           dateReception: date,
           quantiteInitialeKg: controle.quantiteKg,
           notes: dto.notes,
@@ -112,6 +124,11 @@ export class OperationsService {
   /** Sortie de stock : vente en vrac (avec transport éventuel), envoi au conditionnement ou perte. */
   async sortie({ livraison, ...dto }: SortieDto, userId: number) {
     if (dto.motif === 'VENTE' && !dto.clientId) throw new BadRequestException('Le client est obligatoire pour une vente.');
+    // Contrôle qualité avant une vente ou un envoi au conditionnement : lot bloqué, cahier des charges du client.
+    if (dto.motif === 'VENTE' || dto.motif === 'CONDITIONNEMENT') {
+      const controle = await this.qualite.controleExpedition(dto.lotId, dto.motif === 'VENTE' ? dto.clientId : undefined);
+      if (!controle.autorise) throw new BadRequestException(controle.blocages);
+    }
     const operation = await this.prisma.$transaction(async (tx) => {
       const operation = await this.stock.enregistrer(
         tx,

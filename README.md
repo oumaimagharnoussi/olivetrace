@@ -75,6 +75,8 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/lots/{id}` : fiche d'un lot (cuves, analyses, généalogie des assemblages, mouvements)
 - `/operations` : transferts, assemblages (avec contrôle avant validation), sorties de stock et journal des opérations
 - `/livraisons` : suivi des transports sous-traités (planifiée, en cours, livrée)
+- `/qualite` : tableau de bord qualité (lots conformes, non conformes, bloqués), alertes et non-conformités à traiter
+- `/qualite/criteres` : critères des catégories extra vierge et vierge, cahiers des charges des clients
 
 Les boutons d'ajout et de modification n'apparaissent que pour les rôles autorisés à écrire (les mêmes que dans l'API). Les écrans sont décrits dans `web/src/lib/ressources.ts`.
 
@@ -96,6 +98,10 @@ Les inscriptions (prévenir les administrateurs) et le mot de passe oublié envo
   - `GET /api/lots`, `GET /api/lots/:id`, `POST /api/lots/reception`, `POST /api/lots/:id/analyses`
   - `GET /api/operations`, `POST /api/operations/transfert`, `POST /api/operations/assemblage/simulation`, `POST /api/operations/assemblage`, `POST /api/operations/sortie`
   - `GET /api/livraisons`, `PATCH /api/livraisons/:id`
+- Contrôle qualité (étape 3) :
+  - `GET /api/qualite/alertes`, `GET /api/qualite/controle-expedition?lotId=&clientId=`
+  - `GET /api/qualite/specifications`, `POST /api/qualite/specifications`, `PATCH /api/qualite/specifications/:id`
+  - `GET /api/qualite/non-conformites`, `POST /api/qualite/non-conformites`, `PATCH /api/qualite/non-conformites/:id`
 - Santé : `GET /api/health`
 
 Le schéma de données est dans `api/prisma/schema.prisma`.
@@ -109,3 +115,13 @@ Le schéma de données est dans `api/prisma/schema.prisma`.
 - Alertes : lot stocké depuis plus de `ALERTE_DUREE_STOCKAGE_JOURS` jours (180 par défaut, dans `api/.env`), lot en stock sans analyse.
 - Une sortie de type vente demande un client et peut avoir un transport sous-traité (transporteur, camion, chauffeur, bon de livraison), suivi dans `/livraisons`.
 - Il faut au moins une huilerie dans les référentiels pour saisir une réception.
+
+## Règles du contrôle qualité
+
+- Chaque lot a une catégorie visée (extra vierge par défaut, choisie à la réception). Un assemblage prend la moins bonne catégorie visée de ses lots d'origine.
+- Chaque analyse est comparée aux critères du règlement délégué UE 2022/2104 (acidité, peroxyde, K232, K270, ΔK, esters éthyliques, médianes du défaut et du fruité). L'application garde la catégorie atteinte (extra vierge, vierge ou lampante), le résultat et les écarts tels qu'ils ont été calculés ce jour-là.
+- Résultat : conforme, analyse partielle (aucun écart mais des paramètres de la catégorie ne sont pas mesurés) ou non conforme. Le statut qualité du lot est celui de sa dernière analyse.
+- Une analyse non conforme ouvre automatiquement une non-conformité et bloque le lot : plus de vente ni d'envoi au conditionnement. Les transferts, assemblages et pertes restent possibles. Une non-conformité peut aussi être déclarée à la main depuis la fiche du lot (odeur, contamination…).
+- Pour débloquer le lot, la qualité clôture la non-conformité avec une décision : contre-analyse conforme, déclassement (le lot change de catégorie visée), assemblage correctif, dérogation, destruction.
+- Avant une vente, le lot est aussi comparé au cahier des charges du client s'il en a un (ex. polyphénols ≥ 250 mg/kg) : un écart empêche la vente. Un lot sans analyse, une analyse partielle ou une analyse de plus de `ALERTE_AGE_ANALYSE_JOURS` jours (90 par défaut) donnent un avertissement sans bloquer.
+- Les critères des catégories sont modifiables dans `/qualite/criteres` ; le statut des lots analysés est alors recalculé. Critères et non-conformités : rôles Qualité et Direction.

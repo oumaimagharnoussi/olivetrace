@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { QualiteService } from '../qualite/qualite.service.js';
 import { StockService } from './stock.service.js';
 import { AnalyseDto, ReceptionDto } from './vrac.dto.js';
 
@@ -17,15 +18,12 @@ export async function prochainCodeLot(tx: Prisma.TransactionClient, date: Date) 
   return `${prefixe}${String(numero + 1).padStart(4, '0')}`;
 }
 
-export function analyseData({ dateAnalyse, ...dto }: AnalyseDto) {
-  return { ...dto, dateAnalyse: new Date(dateAnalyse) };
-}
-
 @Injectable()
 export class LotsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stock: StockService,
+    private readonly qualite: QualiteService,
     private readonly audit: AuditService,
   ) {}
 
@@ -36,7 +34,7 @@ export class LotsService {
         include: {
           huilerie: { select: { id: true, code: true, nom: true } },
           variete: { select: { id: true, code: true, nom: true } },
-          analyses: { orderBy: { dateAnalyse: 'desc' }, take: 1 },
+          analyses: { orderBy: [{ dateAnalyse: 'desc' }, { id: 'desc' }], take: 1 },
         },
       }),
       this.stock.stockParLot(this.prisma),
@@ -52,7 +50,8 @@ export class LotsService {
       include: {
         huilerie: true,
         variete: true,
-        analyses: { orderBy: { dateAnalyse: 'desc' } },
+        analyses: { orderBy: [{ dateAnalyse: 'desc' }, { id: 'desc' }] },
+        nonConformites: { orderBy: { createdAt: 'desc' }, include: { ouvertePar: { select: { nom: true } }, clotureePar: { select: { nom: true } } } },
         origines: { include: { parent: { select: { id: true, code: true } } } },
         enfants: { include: { lot: { select: { id: true, code: true, dateReception: true } } } },
         mouvements: {
@@ -90,7 +89,6 @@ export class LotsService {
           origine: 'RECEPTION',
           dateReception: date,
           quantiteInitialeKg: quantiteKg,
-          analyses: analyse ? { create: analyseData(analyse) } : undefined,
         },
       });
       await this.stock.enregistrer(
@@ -98,16 +96,17 @@ export class LotsService {
         { type: 'RECEPTION', date, userId, notes: dto.notes },
         repartition.map((r) => ({ lotId: lot.id, stockageId: r.stockageId, quantiteKg: r.quantiteKg })),
       );
-      return lot;
+      // L'analyse est comparée aux critères : si elle n'est pas conforme, le lot est reçu mais bloqué.
+      if (!analyse) return { ...lot, nonConformite: null };
+      const { nonConformite } = await this.qualite.enregistrerAnalyse(tx, lot.id, analyse, userId);
+      return { ...(await tx.lot.findUniqueOrThrow({ where: { id: lot.id } })), nonConformite };
     });
 
     await this.audit.log({ userId, action: 'CREATE', entite: 'Lot', entiteId: lot.id, donnees: { ...dto, code: lot.code, dateReception, repartition, analyse } });
     return lot;
   }
 
-  async ajouterAnalyse(lotId: number, dto: AnalyseDto, userId: number) {
-    const analyse = await this.prisma.analyse.create({ data: { ...analyseData(dto), lot: { connect: { id: lotId } } } });
-    await this.audit.log({ userId, action: 'CREATE', entite: 'Analyse', entiteId: analyse.id, donnees: { lotId, ...dto } });
-    return analyse;
+  ajouterAnalyse(lotId: number, dto: AnalyseDto, userId: number) {
+    return this.qualite.ajouterAnalyse(lotId, dto, userId);
   }
 }

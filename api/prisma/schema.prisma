@@ -1,6 +1,7 @@
 // OliveTrace : schéma de données.
 // Étape 1 (socle) : utilisateurs et rôles, référentiels (huileries, variétés, cuves/citernes, clients), journal d'audit.
 // Étape 2 (flux vrac) : lots, analyses, opérations de stock (réception, transfert, assemblage, sortie), livraisons.
+// Étape 3 (qualité) : critères de qualité, résultat de chaque analyse, non-conformités et blocage des lots.
 
 generator client {
   provider     = "prisma-client"
@@ -39,6 +40,9 @@ model User {
   auditLogs   AuditLog[]
   operations  Operation[]
   resetTokens PasswordResetToken[]
+
+  nonConformitesOuvertes  NonConformite[] @relation("NcOuvertePar")
+  nonConformitesCloturees NonConformite[] @relation("NcClotureePar")
 }
 
 // Lien de réinitialisation du mot de passe : seul le hash SHA-256 du jeton est stocké.
@@ -108,7 +112,8 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  operations Operation[]
+  operations     Operation[]
+  specifications Specification[] // cahiers des charges qualité du client
 }
 
 // Journal de toutes les modifications : base de la traçabilité et de l'option blockchain.
@@ -162,25 +167,29 @@ enum StatutLivraison {
 }
 
 model Lot {
-  id                 Int        @id @default(autoincrement())
-  code               String     @unique @db.VarChar(32) // ex. L2026-0001
+  id                 Int            @id @default(autoincrement())
+  code               String         @unique @db.VarChar(32) // ex. L2026-0001
   origine            OrigineLot
   huilerieId         Int?
-  huilerie           Huilerie?  @relation(fields: [huilerieId], references: [id])
+  huilerie           Huilerie?      @relation(fields: [huilerieId], references: [id])
   varieteId          Int? // vide pour un assemblage de plusieurs variétés
-  variete            Variete?   @relation(fields: [varieteId], references: [id])
-  campagne           String?    @db.VarChar(9) // ex. 2026/2027
+  variete            Variete?       @relation(fields: [varieteId], references: [id])
+  campagne           String?        @db.VarChar(9) // ex. 2026/2027
   dateReception      DateTime // date de réception ou d'assemblage
   quantiteInitialeKg Int
-  numeroBon          String?    @db.VarChar(64) // bon de réception de l'huilerie
-  notes              String?    @db.Text
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  numeroBon          String?        @db.VarChar(64) // bon de réception de l'huilerie
+  notes              String?        @db.Text
+  categorieVisee     CategorieHuile @default(EXTRA_VIERGE) // qualité attendue, contrôlée à chaque analyse
+  statutQualite      StatutQualite  @default(NON_ANALYSE) // résultat de la dernière analyse
+  bloque             Boolean        @default(false) // une non-conformité ouverte bloque la vente et le conditionnement
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
-  analyses   Analyse[]
-  mouvements Mouvement[]
-  origines   LotOrigine[] @relation("LotEnfant") // lots qui composent cet assemblage
-  enfants    LotOrigine[] @relation("LotParent") // assemblages faits à partir de ce lot
+  analyses       Analyse[]
+  nonConformites NonConformite[]
+  mouvements     Mouvement[]
+  origines       LotOrigine[]    @relation("LotEnfant") // lots qui composent cet assemblage
+  enfants        LotOrigine[]    @relation("LotParent") // assemblages faits à partir de ce lot
 
   @@index([dateReception])
 }
@@ -196,23 +205,32 @@ model LotOrigine {
   @@id([lotId, parentId])
 }
 
-// Analyse de laboratoire d'un lot (les seuils et alertes qualité viendront à l'étape 3).
+// Analyse de laboratoire d'un lot. À l'enregistrement, elle est comparée aux critères de qualité :
+// le résultat (catégorie, conformité, écarts) est gardé tel qu'il a été calculé ce jour-là.
 model Analyse {
-  id          Int      @id @default(autoincrement())
-  lotId       Int
-  lot         Lot      @relation(fields: [lotId], references: [id])
-  dateAnalyse DateTime
-  laboratoire String?  @db.VarChar(160)
-  reference   String?  @db.VarChar(64) // n° du bulletin d'analyse
-  acidite     Decimal? @db.Decimal(5, 2) // % acide oléique
-  peroxyde    Decimal? @db.Decimal(6, 2) // meq O2/kg
-  k232        Decimal? @db.Decimal(5, 3)
-  k270        Decimal? @db.Decimal(5, 3)
-  deltaK      Decimal? @db.Decimal(5, 3)
-  polyphenols Int? // mg/kg
-  autres      Json? // autres paramètres libres
-  commentaire String?  @db.Text
-  createdAt   DateTime @default(now())
+  id              Int             @id @default(autoincrement())
+  lotId           Int
+  lot             Lot             @relation(fields: [lotId], references: [id])
+  dateAnalyse     DateTime
+  laboratoire     String?         @db.VarChar(160)
+  reference       String?         @db.VarChar(64) // n° du bulletin d'analyse
+  acidite         Decimal?        @db.Decimal(5, 2) // % acide oléique
+  peroxyde        Decimal?        @db.Decimal(6, 2) // meq O2/kg
+  k232            Decimal?        @db.Decimal(5, 3)
+  k270            Decimal?        @db.Decimal(5, 3)
+  deltaK          Decimal?        @db.Decimal(5, 3)
+  polyphenols     Int? // mg/kg
+  esterEthyliques Decimal?        @db.Decimal(6, 1) // esters éthyliques des acides gras, mg/kg
+  medianeDefaut   Decimal?        @db.Decimal(3, 1) // dégustation : médiane du défaut
+  medianeFruite   Decimal?        @db.Decimal(3, 1) // dégustation : médiane du fruité
+  autres          Json? // autres paramètres libres
+  commentaire     String?         @db.Text
+  categorie       CategorieHuile? // catégorie atteinte d'après les critères
+  resultat        StatutQualite? // par rapport à la catégorie visée du lot
+  ecarts          Json? // critères non respectés : [{ parametre, valeur, min, max }]
+  createdAt       DateTime        @default(now())
+
+  nonConformites NonConformite[]
 
   @@index([lotId, dateAnalyse])
 }
@@ -269,5 +287,106 @@ model Livraison {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
+  @@index([statut])
+}
+
+// ---------------------------------------------------------------------------
+// Étape 3 : contrôle qualité
+// ---------------------------------------------------------------------------
+// Règles :
+// - chaque analyse est comparée aux critères des catégories (extra vierge, vierge) et à la catégorie visée du lot ;
+// - une analyse non conforme ouvre une non-conformité et bloque le lot : plus de vente ni d'envoi au conditionnement
+//   tant qu'elle n'est pas clôturée avec une décision (contre-analyse, déclassement, dérogation…) ;
+// - avant une vente, le lot est aussi comparé au cahier des charges du client, s'il en a un.
+
+enum CategorieHuile {
+  EXTRA_VIERGE
+  VIERGE
+  LAMPANTE // ne respecte pas les critères de l'huile vierge
+}
+
+enum StatutQualite {
+  NON_ANALYSE
+  CONFORME
+  INCOMPLET // aucun écart, mais des paramètres de la catégorie visée n'ont pas été mesurés
+  NON_CONFORME
+}
+
+enum ParametreAnalyse {
+  ACIDITE
+  PEROXYDE
+  K232
+  K270
+  DELTA_K
+  POLYPHENOLS
+  ESTERS_ETHYLIQUES
+  MEDIANE_DEFAUT
+  MEDIANE_FRUITE
+}
+
+enum StatutNonConformite {
+  OUVERTE
+  EN_TRAITEMENT
+  CLOTUREE
+}
+
+enum DecisionNonConformite {
+  CONTRE_ANALYSE_CONFORME // une nouvelle analyse est conforme
+  DECLASSEMENT // le lot passe dans la catégorie atteinte
+  ASSEMBLAGE_CORRECTIF // le lot sera assemblé pour corriger sa qualité
+  DEROGATION // accepté en l'état (accord du client ou de la direction)
+  DESTRUCTION
+  AUTRE
+}
+
+// Ensemble de critères : une catégorie réglementaire (règlement UE 2022/2104) ou le cahier des charges d'un client.
+model Specification {
+  id        Int             @id @default(autoincrement())
+  code      String          @unique @db.VarChar(32)
+  nom       String          @db.VarChar(160)
+  categorie CategorieHuile? @unique // critères réglementaires d'une catégorie
+  clientId  Int? // cahier des charges d'un client
+  client    Client?         @relation(fields: [clientId], references: [id])
+  actif     Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  criteres CritereQualite[]
+
+  @@index([clientId])
+}
+
+// Limite d'un paramètre : minimum et/ou maximum, bornes comprises.
+model CritereQualite {
+  id              Int              @id @default(autoincrement())
+  specificationId Int
+  specification   Specification    @relation(fields: [specificationId], references: [id], onDelete: Cascade)
+  parametre       ParametreAnalyse
+  min             Decimal?         @db.Decimal(8, 3)
+  max             Decimal?         @db.Decimal(8, 3)
+
+  @@unique([specificationId, parametre])
+}
+
+model NonConformite {
+  id               Int                    @id @default(autoincrement())
+  code             String                 @unique @db.VarChar(32) // ex. NC2026-0001
+  lotId            Int
+  lot              Lot                    @relation(fields: [lotId], references: [id])
+  analyseId        Int? // vide pour une non-conformité saisie à la main
+  analyse          Analyse?               @relation(fields: [analyseId], references: [id])
+  description      String                 @db.Text
+  statut           StatutNonConformite    @default(OUVERTE)
+  decision         DecisionNonConformite?
+  actionCorrective String?                @db.Text
+  ouverteParId     Int?
+  ouvertePar       User?                  @relation("NcOuvertePar", fields: [ouverteParId], references: [id])
+  clotureeParId    Int?
+  clotureePar      User?                  @relation("NcClotureePar", fields: [clotureeParId], references: [id])
+  clotureeLe       DateTime?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@index([lotId])
   @@index([statut])
 }
