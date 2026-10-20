@@ -1,0 +1,103 @@
+// OliveTrace : schéma de données, étape 1 (socle).
+// Utilisateurs et rôles, référentiels (huileries, variétés, cuves/citernes, clients), journal d'audit.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum Role {
+  ADMIN
+  DIRECTION
+  STOCK
+  QUALITE
+  PRODUCTION
+  EXPORT
+}
+
+enum TypeStockage {
+  CUVE_SOUTERRAINE // cuve enterrée, 24 t par défaut
+  CITERNE // citerne, 30 t par défaut
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(191)
+  passwordHash String
+  nom          String   @db.VarChar(120)
+  role         Role
+  actif        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditLogs AuditLog[]
+}
+
+model Huilerie {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique @db.VarChar(32)
+  nom       String   @db.VarChar(160)
+  region    String?  @db.VarChar(120)
+  adresse   String?  @db.VarChar(255)
+  telephone String?  @db.VarChar(40)
+  agrement  String?  @db.VarChar(80) // numéro d'agrément sanitaire
+  actif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Variete {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique @db.VarChar(32)
+  nom         String   @db.VarChar(120) // ex. Chemlali, Chétoui, Oueslati
+  description String?  @db.Text
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Stockage {
+  id          Int          @id @default(autoincrement())
+  code        String       @unique @db.VarChar(32)
+  type        TypeStockage
+  capaciteKg  Int // capacité en kilogrammes (24 000 pour une cuve, 30 000 pour une citerne)
+  emplacement String?      @db.VarChar(160)
+  actif       Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Client {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique @db.VarChar(32)
+  raisonSociale String   @db.VarChar(200)
+  pays          String   @db.VarChar(2) // code ISO 3166-1 alpha-2
+  ville         String?  @db.VarChar(120)
+  adresse       String?  @db.VarChar(255)
+  email         String?  @db.VarChar(191)
+  telephone     String?  @db.VarChar(40)
+  numeroTva     String?  @db.VarChar(40)
+  actif         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Journal de toutes les modifications : base de la traçabilité et de l'option blockchain.
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   @db.VarChar(16) // CREATE, UPDATE, DELETE
+  entite    String   @db.VarChar(64)
+  entiteId  String   @db.VarChar(64)
+  donnees   Json?
+  createdAt DateTime @default(now())
+
+  @@index([entite, entiteId])
+  @@index([createdAt])
+}
