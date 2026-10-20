@@ -5,6 +5,7 @@
 // Étape 4 (conditionnement) : filtration, mise en bouteille (lots conditionnés) et stock de produits finis.
 // Étape 5 (passeport produit) : QR code de chaque lot conditionné et de chaque bouteille, page publique.
 // Étape 6 (export) : expéditions de produits finis et documents PDF du dossier export.
+// Étape 7 (tableau de bord et rapports) : pas de nouvelle table, tout est calculé à partir des données existantes.
 
 generator client {
   provider     = "prisma-client"

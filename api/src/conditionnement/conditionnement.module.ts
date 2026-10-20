@@ -10,5 +10,6 @@ import { FiltrationsService } from './filtrations.service.js';
   imports: [QualiteModule, VracModule],
   controllers: [FiltrationsController, ConditionnementsController, ProduitsFinisController],
   providers: [FiltrationsService, ConditionnementsService],
+  exports: [ConditionnementsService],
 })
 export class ConditionnementModule {}

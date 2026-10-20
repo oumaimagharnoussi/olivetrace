@@ -67,7 +67,8 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/login` : connexion
 - `/register` : demande de compte (le compte reste « En attente » jusqu'à sa validation)
 - `/forgot-password` et `/reset-password` : mot de passe oublié, par un lien envoyé par e-mail (valable 1 heure)
-- `/` : accueil avec le nombre de référentiels actifs
+- `/` : tableau de bord (mis à jour chaque minute) : lots actifs, stock par cuve et en produits finis, alertes qualité et non-conformités ouvertes, expéditions en cours par destination
+- `/rapports` : rapports sur une période (campagne par défaut) avec graphiques et export CSV : réceptions par huilerie, variété et mois, ventes en vrac, mise en bouteille, exports par pays, client et mois (direction et administrateurs)
 - `/referentiels/huileries`, `/referentiels/varietes`, `/referentiels/stockages`, `/referentiels/clients` : liste, ajout, modification, désactivation
 - `/utilisateurs` : gestion des comptes (administrateur seulement)
 - `/stock` : état des cuves et citernes (lot contenu, remplissage, ancienneté) et alertes

@@ -20,7 +20,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const liens = [
-    { href: "/", label: "Accueil" },
+    { href: "/", label: "Tableau de bord" },
+    ...(user.role === "ADMIN" || user.role === "DIRECTION" ? [{ href: "/rapports", label: "Rapports" }] : []),
     { href: "/stock", label: "Stock en cuves" },
     { href: "/lots", label: "Lots" },
     { href: "/operations", label: "Opérations" },
