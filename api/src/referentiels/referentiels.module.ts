@@ -7,9 +7,11 @@ import { StockageController } from './stockages/stockages.controller.js';
 import { StockageService } from './stockages/stockages.service.js';
 import { ClientController } from './clients/clients.controller.js';
 import { ClientService } from './clients/clients.service.js';
+import { FormatController } from './formats/formats.controller.js';
+import { FormatService } from './formats/formats.service.js';
 
 @Module({
-  controllers: [HuilerieController, VarieteController, StockageController, ClientController],
-  providers: [HuilerieService, VarieteService, StockageService, ClientService],
+  controllers: [HuilerieController, VarieteController, StockageController, ClientController, FormatController],
+  providers: [HuilerieService, VarieteService, StockageService, ClientService, FormatService],
 })
 export class ReferentielsModule {}

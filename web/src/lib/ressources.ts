@@ -29,6 +29,7 @@ export interface Ressource {
 export const TYPE_STOCKAGE: Record<string, string> = {
   CUVE_SOUTERRAINE: "Cuve souterraine",
   CITERNE: "Citerne",
+  CUVE_TAMPON: "Cuve tampon (conditionnement)",
 };
 
 export const REFERENTIELS: Record<string, Ressource> = {
@@ -92,6 +93,21 @@ export const REFERENTIELS: Record<string, Ressource> = {
       { name: "numeroTva", label: "N° de TVA" },
     ],
   },
+};
+
+// Les formats sont placés après les clients : ils servent à l'atelier de conditionnement.
+REFERENTIELS.formats = {
+  titre: "Formats de bouteille",
+  ajouter: "Ajouter un format",
+  endpoint: "/formats",
+  rolesEcriture: ["DIRECTION", "PRODUCTION"],
+  champs: [
+    { name: "code", label: "Code", required: true, colonne: true, placeholder: "VER-750" },
+    { name: "nom", label: "Nom", required: true, colonne: true, placeholder: "Bouteille verre 75 cl" },
+    { name: "contenanceMl", label: "Contenance (ml)", type: "number", required: true, colonne: true, placeholder: "750" },
+    { name: "materiau", label: "Matériau", colonne: true, placeholder: "verre" },
+    { name: "unitesParCarton", label: "Unités par carton", type: "number", colonne: true },
+  ],
 };
 
 export const UTILISATEURS: Ressource = {

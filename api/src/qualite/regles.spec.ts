@@ -101,4 +101,14 @@ describe('controlerExpedition', () => {
     const ancienne = { ...lot, derniereAnalyse: { ...lot.derniereAnalyse, dateAnalyse: new Date('2026-05-01') } };
     expect(controlerExpedition(ancienne, [], options).avertissements[0]).toContain('172 jours');
   });
+
+  it('refuse le conditionnement d\'un lot sans analyse ou non conforme', () => {
+    const conditionnement = { ...options, conditionnement: true };
+    expect(controlerExpedition({ ...lot, statutQualite: 'NON_ANALYSE', derniereAnalyse: null }, [], conditionnement)).toMatchObject({
+      autorise: false,
+      blocages: [expect.stringContaining('doit être analysé')],
+    });
+    expect(controlerExpedition({ ...lot, statutQualite: 'NON_CONFORME' }, [], conditionnement).blocages[0]).toContain('ne peut pas être conditionné');
+    expect(controlerExpedition({ ...lot, statutQualite: 'INCOMPLET' }, [], conditionnement).autorise).toBe(true);
+  });
 });

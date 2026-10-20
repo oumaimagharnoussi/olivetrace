@@ -11,5 +11,6 @@ import { LivraisonsController, LotsController, OperationsController, StockContro
   imports: [QualiteModule],
   controllers: [StockController, LotsController, OperationsController, LivraisonsController],
   providers: [StockService, LotsService, OperationsService, LivraisonsService],
+  exports: [StockService],
 })
 export class VracModule {}

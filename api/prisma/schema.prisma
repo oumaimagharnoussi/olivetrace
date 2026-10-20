@@ -2,6 +2,7 @@
 // Étape 1 (socle) : utilisateurs et rôles, référentiels (huileries, variétés, cuves/citernes, clients), journal d'audit.
 // Étape 2 (flux vrac) : lots, analyses, opérations de stock (réception, transfert, assemblage, sortie), livraisons.
 // Étape 3 (qualité) : critères de qualité, résultat de chaque analyse, non-conformités et blocage des lots.
+// Étape 4 (conditionnement) : filtration, mise en bouteille (lots conditionnés) et stock de produits finis.
 
 generator client {
   provider     = "prisma-client"
@@ -25,6 +26,7 @@ enum Role {
 enum TypeStockage {
   CUVE_SOUTERRAINE // cuve enterrée, 24 t par défaut
   CITERNE // citerne, 30 t par défaut
+  CUVE_TAMPON // cuve de l'atelier de conditionnement : huile filtrée en attente de mise en bouteille
 }
 
 model User {
@@ -41,8 +43,9 @@ model User {
   operations  Operation[]
   resetTokens PasswordResetToken[]
 
-  nonConformitesOuvertes  NonConformite[] @relation("NcOuvertePar")
-  nonConformitesCloturees NonConformite[] @relation("NcClotureePar")
+  nonConformitesOuvertes  NonConformite[]        @relation("NcOuvertePar")
+  nonConformitesCloturees NonConformite[]        @relation("NcClotureePar")
+  mouvementsProduits      MouvementProduitFini[]
 }
 
 // Lien de réinitialisation du mot de passe : seul le hash SHA-256 du jeton est stocké.
@@ -112,8 +115,10 @@ model Client {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  operations     Operation[]
-  specifications Specification[] // cahiers des charges qualité du client
+  operations         Operation[]
+  specifications     Specification[] // cahiers des charges qualité du client
+  lotsConditionnes   LotConditionne[]
+  mouvementsProduits MouvementProduitFini[]
 }
 
 // Journal de toutes les modifications : base de la traçabilité et de l'option blockchain.
@@ -143,6 +148,7 @@ model AuditLog {
 enum OrigineLot {
   RECEPTION // huile reçue d'une huilerie
   ASSEMBLAGE // mélange de plusieurs lots
+  FILTRATION // huile filtrée à partir d'un lot
 }
 
 enum TypeOperation {
@@ -150,11 +156,13 @@ enum TypeOperation {
   TRANSFERT
   ASSEMBLAGE
   SORTIE
+  FILTRATION // passage d'un lot dans le filtre, d'une cuve vers une autre
+  CONDITIONNEMENT // mise en bouteille : l'huile sort de la cuve et devient un lot conditionné
 }
 
 enum MotifSortie {
   VENTE // vente en vrac à un client
-  CONDITIONNEMENT // envoi vers la filtration / mise en bouteille (étape 4)
+  CONDITIONNEMENT // ancien motif : depuis l'étape 4, la filtration et la mise en bouteille ont leurs propres opérations
   PERTE // perte, lie, écart d'inventaire
   AUTRE
 }
@@ -188,8 +196,12 @@ model Lot {
   analyses       Analyse[]
   nonConformites NonConformite[]
   mouvements     Mouvement[]
-  origines       LotOrigine[]    @relation("LotEnfant") // lots qui composent cet assemblage
-  enfants        LotOrigine[]    @relation("LotParent") // assemblages faits à partir de ce lot
+  origines       LotOrigine[]    @relation("LotEnfant") // lots qui composent cet assemblage ou ce lot filtré
+  enfants        LotOrigine[]    @relation("LotParent") // assemblages et lots filtrés faits à partir de ce lot
+
+  filtrations      Filtration[]     @relation("FiltrationEntree") // filtrations faites à partir de ce lot
+  filtration       Filtration?      @relation("FiltrationSortie") // pour un lot filtré : la filtration qui l'a produit
+  lotsConditionnes LotConditionne[]
 
   @@index([dateReception])
 }
@@ -248,8 +260,10 @@ model Operation {
   notes     String?       @db.Text
   createdAt DateTime      @default(now())
 
-  mouvements Mouvement[]
-  livraison  Livraison?
+  mouvements     Mouvement[]
+  livraison      Livraison?
+  filtration     Filtration?
+  lotConditionne LotConditionne?
 
   @@index([date])
 }
@@ -389,4 +403,107 @@ model NonConformite {
 
   @@index([lotId])
   @@index([statut])
+}
+
+// ---------------------------------------------------------------------------
+// Étape 4 : filtration et conditionnement
+// ---------------------------------------------------------------------------
+// Règles :
+// - seul un lot analysé, conforme et non bloqué peut être filtré ou mis en bouteille (contrôle de l'étape 3) ;
+// - la filtration fait passer l'huile d'une cuve vers une autre (souvent une cuve tampon) et crée un lot filtré,
+//   relié au lot d'entrée ; tant qu'il n'a pas sa propre analyse, le lot filtré reprend la qualité du lot d'entrée ;
+// - la mise en bouteille sort l'huile de sa cuve et crée un lot conditionné (numéro imprimé sur l'étiquette) ;
+// - le stock de produits finis, en unités (bouteilles, bidons), est la somme des mouvements de chaque lot conditionné.
+
+enum TypeMouvementProduit {
+  CONDITIONNEMENT // entrée en stock à la mise en bouteille
+  EXPEDITION // vente ou expédition à un client
+  CASSE // casse, échantillons, pertes
+  AJUSTEMENT // correction d'inventaire (+ ou -)
+}
+
+// Contenant : bouteille, bidon… (référentiel).
+model FormatConditionnement {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique @db.VarChar(32) // ex. VER-750
+  nom             String   @db.VarChar(120) // ex. Bouteille verre 75 cl
+  contenanceMl    Int // 250, 500, 750, 1000, 5000…
+  materiau        String?  @db.VarChar(60) // verre, PET, fer blanc
+  unitesParCarton Int?
+  actif           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lots LotConditionne[]
+}
+
+// Filtration d'un lot : l'huile passe d'une cuve à une autre et forme un lot filtré.
+model Filtration {
+  id               Int       @id @default(autoincrement())
+  code             String    @unique @db.VarChar(32) // ex. F2026-0001
+  operationId      Int       @unique
+  operation        Operation @relation(fields: [operationId], references: [id])
+  lotEntreeId      Int
+  lotEntree        Lot       @relation("FiltrationEntree", fields: [lotEntreeId], references: [id])
+  lotSortieId      Int       @unique
+  lotSortie        Lot       @relation("FiltrationSortie", fields: [lotSortieId], references: [id])
+  quantiteEntreeKg Int // huile prise dans la cuve de départ
+  quantiteSortieKg Int // huile filtrée obtenue ; la différence est la perte de filtration
+  operateur        String    @db.VarChar(120)
+  typeFiltre       String?   @db.VarChar(80) // ex. plaques de cellulose, cartouches, terre de diatomée
+  porositeMicrons  Decimal?  @db.Decimal(6, 1)
+  pressionBar      Decimal?  @db.Decimal(5, 2)
+  temperatureC     Decimal?  @db.Decimal(4, 1)
+  debitLh          Int? // débit en litres par heure
+  dureeMinutes     Int?
+  notes            String?   @db.Text
+  createdAt        DateTime  @default(now())
+
+  @@index([lotEntreeId])
+}
+
+// Lot conditionné : une mise en bouteille d'un lot, identifiée par le numéro de lot final imprimé sur l'étiquette.
+model LotConditionne {
+  id              Int                   @id @default(autoincrement())
+  code            String                @unique @db.VarChar(32) // numéro de lot final, ex. C2026-0001
+  operationId     Int                   @unique
+  operation       Operation             @relation(fields: [operationId], references: [id])
+  lotVracId       Int
+  lotVrac         Lot                   @relation(fields: [lotVracId], references: [id])
+  formatId        Int
+  format          FormatConditionnement @relation(fields: [formatId], references: [id])
+  nombreUnites    Int
+  quantiteKg      Int // huile prise dans la cuve
+  dluo            DateTime? // date de durabilité minimale (« à consommer de préférence avant »)
+  clientId        Int? // client ou commande pour laquelle le lot est conditionné
+  client          Client?               @relation(fields: [clientId], references: [id])
+  paysDestination String?               @db.VarChar(2) // code ISO 3166-1 alpha-2
+  destination     String?               @db.VarChar(160) // marché, commande, marque
+  operateur       String?               @db.VarChar(120)
+  notes           String?               @db.Text
+  createdAt       DateTime              @default(now())
+
+  mouvements MouvementProduitFini[]
+
+  @@index([lotVracId])
+}
+
+// Entrée (+) ou sortie (-) d'unités d'un lot conditionné dans le stock de produits finis.
+model MouvementProduitFini {
+  id               Int                  @id @default(autoincrement())
+  lotConditionneId Int
+  lotConditionne   LotConditionne       @relation(fields: [lotConditionneId], references: [id])
+  type             TypeMouvementProduit
+  date             DateTime
+  quantiteUnites   Int // positif = entrée, négatif = sortie
+  clientId         Int?
+  client           Client?              @relation(fields: [clientId], references: [id])
+  reference        String?              @db.VarChar(64) // bon de livraison, facture
+  userId           Int?
+  user             User?                @relation(fields: [userId], references: [id])
+  notes            String?              @db.Text
+  createdAt        DateTime             @default(now())
+
+  @@index([lotConditionneId])
+  @@index([date])
 }

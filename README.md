@@ -77,6 +77,13 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/livraisons` : suivi des transports sous-traités (planifiée, en cours, livrée)
 - `/qualite` : tableau de bord qualité (lots conformes, non conformes, bloqués), alertes et non-conformités à traiter
 - `/qualite/criteres` : critères des catégories extra vierge et vierge, cahiers des charges des clients
+- `/filtration` : filtrations (cuve de départ et d'arrivée, paramètres techniques, opérateur, perte) ; l'huile filtrée forme un nouveau lot
+- `/conditionnement` : mises en bouteille (format, nombre d'unités, numéro de lot final, DLUO, client et destination)
+- `/conditionnement/{id}` : fiche d'un lot conditionné, avec la remontée jusqu'aux lots reçus des huileries
+- `/produits-finis` : stock de bouteilles par format et par lot, expéditions, casse et ajustements
+- `/referentiels/formats` : formats de bouteille et de bidon
+
+Seul un lot analysé, conforme et non bloqué peut être filtré ou mis en bouteille. Un lot filtré reprend la qualité du lot d'origine tant qu'il n'a pas sa propre analyse.
 
 Les boutons d'ajout et de modification n'apparaissent que pour les rôles autorisés à écrire (les mêmes que dans l'API). Les écrans sont décrits dans `web/src/lib/ressources.ts`.
 

@@ -121,12 +121,15 @@ export class OperationsService {
     return { lot, ...controle };
   }
 
-  /** Sortie de stock : vente en vrac (avec transport éventuel), envoi au conditionnement ou perte. */
+  /** Sortie de stock : vente en vrac (avec transport éventuel) ou perte. */
   async sortie({ livraison, ...dto }: SortieDto, userId: number) {
     if (dto.motif === 'VENTE' && !dto.clientId) throw new BadRequestException('Le client est obligatoire pour une vente.');
-    // Contrôle qualité avant une vente ou un envoi au conditionnement : lot bloqué, cahier des charges du client.
-    if (dto.motif === 'VENTE' || dto.motif === 'CONDITIONNEMENT') {
-      const controle = await this.qualite.controleExpedition(dto.lotId, dto.motif === 'VENTE' ? dto.clientId : undefined);
+    if (dto.motif === 'CONDITIONNEMENT') {
+      throw new BadRequestException("Pour envoyer de l'huile au conditionnement, enregistrez une filtration ou une mise en bouteille.");
+    }
+    // Contrôle qualité avant une vente : lot bloqué, cahier des charges du client.
+    if (dto.motif === 'VENTE') {
+      const controle = await this.qualite.controleExpedition(dto.lotId, dto.clientId);
       if (!controle.autorise) throw new BadRequestException(controle.blocages);
     }
     const operation = await this.prisma.$transaction(async (tx) => {
