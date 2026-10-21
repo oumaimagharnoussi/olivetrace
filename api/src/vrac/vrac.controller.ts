@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, ParseBoolPipe, ParseEnumPipe, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseBoolPipe, ParseEnumPipe, ParseIntPipe, Patch, Post, Put, Query, StreamableFile } from '@nestjs/common';
 import { type AuthUser, CurrentUser, Roles } from '../auth/decorators.js';
 import { Role, StatutLivraison, TypeOperation } from '../generated/prisma/enums.js';
 import { LivraisonsService } from './livraisons.service.js';
 import { LotsService } from './lots.service.js';
 import { OperationsService } from './operations.service.js';
 import { StockService } from './stock.service.js';
-import { AnalyseDto, AssemblageDto, ReceptionDto, SortieDto, TransfertDto, UpdateLivraisonDto } from './vrac.dto.js';
+import { AnalyseDto, AssemblageDto, ReceptionDto, SortieDto, TransfertDto, TransportReceptionDto, UpdateLivraisonDto } from './vrac.dto.js';
 
 // Lecture : tout utilisateur connecté. Mouvements de stock : ADMIN, DIRECTION, STOCK.
 
@@ -43,6 +43,20 @@ export class LotsController {
   @Roles(Role.DIRECTION, Role.STOCK)
   reception(@Body() dto: ReceptionDto, @CurrentUser() user: AuthUser) {
     return this.lots.reception(dto, user.id);
+  }
+
+  /** Transport sous-traité de la réception (prestataire, conditions, contrôles à l'arrivée). */
+  @Put(':id/transport')
+  @Roles(Role.DIRECTION, Role.STOCK)
+  transport(@Param('id', ParseIntPipe) id: number, @Body() dto: TransportReceptionDto, @CurrentUser() user: AuthUser) {
+    return this.lots.enregistrerTransport(id, dto, user.id);
+  }
+
+  /** Bon de réception numérique (PDF). */
+  @Get(':id/bon-reception')
+  async bonReception(@Param('id', ParseIntPipe) id: number) {
+    const { pdf, nomFichier } = await this.lots.bonReceptionPdf(id);
+    return new StreamableFile(pdf, { type: 'application/pdf', disposition: `attachment; filename="${nomFichier}"` });
   }
 
   @Post(':id/analyses')

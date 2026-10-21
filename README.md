@@ -71,7 +71,7 @@ Ouvrir http://localhost:3000 et se connecter avec le compte créé par le seed :
 - `/produits-finis` : stock de bouteilles par format et par lot, expéditions, casse et ajustements
 - `/referentiels/formats` : formats de bouteille et de bidon
 - `/conditionnement/{id}/etiquettes` : impression du QR code du lot ou d'une planche d'étiquettes, une par bouteille
-- `/p/{jeton}` : passeport produit public, ouvert en scannant le QR code (sans connexion) ; il montre aussi la preuve d'ancrage blockchain de chaque étape (réception, filtration, analyses, mise en bouteille), sans leur contenu
+- `/p/{jeton}` : passeport produit public, ouvert en scannant le QR code (sans connexion) ; il montre aussi la date et le pays de chaque expédition du lot, la déclaration de conformité UE du lot en PDF (si le lot est conforme) et la preuve d'ancrage blockchain de chaque étape (réception, filtration, analyses, mise en bouteille), sans leur contenu
 - `/expeditions` : expéditions export (client, pays de destination, incoterm, transport, lots conditionnés)
 - `/expeditions/{id}` : fiche d'une expédition, départ et livraison, téléchargement du dossier export en PDF
 
@@ -116,7 +116,8 @@ Le schéma de données est dans `api/prisma/schema.prisma`.
 - Une cuve ou citerne contient un seul lot à la fois et ne peut pas dépasser sa capacité. Une réception peut remplir plusieurs cuves.
 - Mettre deux lots ensemble est un assemblage : il crée un nouveau lot relié à ses lots d'origine, ce qui permet de remonter jusqu'aux huileries. La cuve de l'assemblage doit être vide, ou se vider entièrement dans l'assemblage.
 - Avant de confirmer un assemblage, l'application affiche l'acidité estimée (moyenne pondérée des dernières analyses) et des avertissements : variétés ou campagnes différentes, lots sans analyse, mélange avec une huile au-dessus de 0,8 % d'acidité.
-- Alertes : lot stocké depuis plus de `ALERTE_DUREE_STOCKAGE_JOURS` jours (180 par défaut, dans `api/.env`), lot en stock sans analyse.
+- Transport sous-traité à la réception (huilerie → cuves) : prestataire, véhicule, chauffeur, bon de livraison, conditions de livraison, poids annoncé, température de l'huile, état de la citerne et des plombs. Il donne un **bon de réception numérique** (PDF, numéro BR2026-0001…) téléchargeable depuis la fiche du lot ; un écart de poids au-delà de 0,5 %, une huile hors de 5 à 30 °C, une citerne non conforme ou des plombs rompus sont notés en réserves.
+- Alertes : lot stocké depuis plus de `ALERTE_DUREE_STOCKAGE_JOURS` jours (180 par défaut, dans `api/.env`), lot en stock sans analyse, réception avec réserves, assemblage de lots incompatibles (qualités, variétés ou campagnes différentes), lot conditionné qui ne respecte plus le cahier des charges du client pour lequel il a été préparé.
 - Une sortie de type vente demande un client et peut avoir un transport sous-traité (transporteur, camion, chauffeur, bon de livraison), suivi dans `/livraisons`.
 - Il faut au moins une huilerie dans les référentiels pour saisir une réception.
 
@@ -168,7 +169,7 @@ ou indiquer le navigateur dans `api/.env`, par exemple `CHROME_PATH='C:\Program 
 
 ## Intelligence artificielle
 
-Les modèles sont calculés par l'API (module `api/src/ia`), sans service à installer : ils apprennent à chaque réception et à chaque analyse saisies. Ce sont des statistiques robustes adaptées à un historique court (une campagne) : moyenne de l'huilerie rapprochée de la moyenne générale quand elle a peu de lots, écart absolu médian pour repérer les valeurs inhabituelles, tendance linéaire pour l'évolution en cuve. Chaque résultat indique sur combien de lots il repose. Avec plusieurs campagnes d'historique, un service Python (scikit-learn) pourra prendre le relais sans changer les écrans.
+Les modèles sont calculés par l'API (module `api/src/ia`), sans service à installer : ils apprennent à chaque réception et à chaque analyse saisies. Ce sont des statistiques robustes adaptées à un historique court (une campagne) : moyenne de l'huilerie rapprochée de la moyenne générale quand elle a peu de lots, écart absolu médian pour repérer les valeurs inhabituelles, tendance linéaire pour l'évolution en cuve. Chaque résultat indique sur combien de lots il repose. Les recommandations de lots et de formats se demandent pour un client ou pour un marché (un pays, ou toute l'Union européenne). Avec plusieurs campagnes d'historique, un service Python (scikit-learn) pourra prendre le relais sans changer les écrans.
 
 ## Blockchain (option)
 

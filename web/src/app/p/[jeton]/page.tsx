@@ -33,7 +33,7 @@ async function Contenu({ params, searchParams }: Pick<PageProps<"/p/[jeton]">, "
     // API injoignable : même message qu'un passeport introuvable.
   }
   if (!passeport) return <Indisponible />;
-  return <Fiche p={passeport} />;
+  return <Fiche p={passeport} jeton={jeton} />;
 }
 
 function Indisponible() {
@@ -75,7 +75,7 @@ function Ligne({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Fiche({ p }: { p: PasseportPublic }) {
+function Fiche({ p, jeton }: { p: PasseportPublic; jeton: string }) {
   const { origine, analyse, procede, destination, bouteille } = p;
   return (
     <main className="mx-auto max-w-xl space-y-4 px-4 py-8">
@@ -186,7 +186,7 @@ function Fiche({ p }: { p: PasseportPublic }) {
         </Section>
       )}
 
-      {p.certifications.length > 0 && (
+      {(p.certifications.length > 0 || p.declarationConformite) && (
         <Section titre="Certifications et conformité">
           <ul className="space-y-2 text-sm text-stone-800">
             {p.certifications.map((c) => (
@@ -196,14 +196,32 @@ function Fiche({ p }: { p: PasseportPublic }) {
               </li>
             ))}
           </ul>
+          {p.declarationConformite && (
+            <a
+              href={`/p/${encodeURIComponent(jeton)}/declaration`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-block rounded-md border border-olive-200 px-3 py-2 text-sm font-medium text-olive-800 hover:bg-olive-50"
+            >
+              Télécharger la déclaration de conformité UE (PDF)
+            </a>
+          )}
         </Section>
       )}
 
       {destination && (
-        <Section titre="Destination">
+        <Section titre="Expédition">
           <dl>
-            {destination.pays && <Ligne label="Pays">{destination.pays}</Ligne>}
+            <Ligne label="N° de lot">{p.code}</Ligne>
+            {destination.pays && <Ligne label="Pays de destination">{destination.pays}</Ligne>}
             {destination.marche && <Ligne label="Marché">{destination.marche}</Ligne>}
+            {destination.expeditions.map((e, i) => (
+              <Ligne key={i} label={destination.expeditions.length > 1 ? `Départ ${i + 1}` : "Date d'expédition"}>
+                {jour(e.dateDepart)}
+                {e.pays && e.codePays !== destination.codePays ? ` vers ${e.pays}` : ""}
+                {e.livree ? ` · livré${e.dateLivraison ? ` le ${jour(e.dateLivraison)}` : ""}` : " · en route"}
+              </Ligne>
+            ))}
           </dl>
         </Section>
       )}

@@ -7,12 +7,13 @@ import { DENSITE_HUILE_KG_L } from '../conditionnement/regles.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { ParametreAnalyse, StatutExpedition } from '../generated/prisma/enums.js';
 import { PasseportService, nomPays } from '../passeport/passeport.service.js';
+import { PdfService } from '../pdf/pdf.service.js';
+import { societe } from '../pdf/societe.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { LIBELLES_CATEGORIE, QualiteService } from '../qualite/qualite.service.js';
 import { PARAMETRES } from '../qualite/regles.js';
-import { type DossierExport, type Exportateur, type LigneDossier, pageHtml } from './documents.js';
+import { type DossierExport, type LigneDossier, pageHtml } from './documents.js';
 import { CreateExpeditionDto, LigneExpeditionDto, StatutExpeditionDto, UpdateExpeditionDto } from './export.dto.js';
-import { PdfService } from './pdf.service.js';
 import { CODES_NC, DOCUMENTS, PAYS_UE, type TypeDocument, colisage, controlerLignes, controlerTransition } from './regles.js';
 
 type Db = PrismaService | Prisma.TransactionClient;
@@ -103,13 +104,66 @@ export class ExpeditionsService {
     return client;
   }
 
-  findAll(statut?: StatutExpedition) {
+  findAll(filtres: { statut?: StatutExpedition; lotConditionneId?: number; lotVracId?: number; pays?: string; clientId?: number } = {}) {
+    const { statut, lotConditionneId, lotVracId, pays, clientId } = filtres;
     return this.prisma.expedition.findMany({
-      where: { statut },
+      where: {
+        statut,
+        clientId,
+        paysDestination: pays?.toUpperCase(),
+        ...(lotConditionneId || lotVracId ? { lignes: { some: { lotConditionneId, lotConditionne: lotVracId ? { lotVracId } : undefined } } } : {}),
+      },
       orderBy: [{ datePrevue: 'desc' }, { id: 'desc' }],
       take: 500,
       include: expeditionInclude,
     });
+  }
+
+  /**
+   * Suivi des expéditions par destination : pour chaque pays, nombre d'expéditions par statut, volume parti
+   * et lots expédiés, avec la date du dernier départ.
+   */
+  async suivi() {
+    const expeditions = await this.prisma.expedition.findMany({
+      where: { statut: { not: 'ANNULEE' } },
+      select: {
+        paysDestination: true,
+        statut: true,
+        dateDepart: true,
+        lignes: { select: { quantiteUnites: true, lotConditionne: { select: { id: true, code: true, format: { select: { contenanceMl: true } } } } } },
+      },
+    });
+    const parPays = new Map<
+      string,
+      { pays: string; nomPays: string | null; ue: boolean; preparees: number; expediees: number; livrees: number; litres: number; lots: Map<number, string>; dernierDepart: Date | null }
+    >();
+    for (const e of expeditions) {
+      const ligne = parPays.get(e.paysDestination) ?? {
+        pays: e.paysDestination,
+        nomPays: nomPays(e.paysDestination),
+        ue: PAYS_UE.has(e.paysDestination),
+        preparees: 0,
+        expediees: 0,
+        livrees: 0,
+        litres: 0,
+        lots: new Map<number, string>(),
+        dernierDepart: null,
+      };
+      if (e.statut === 'PREPAREE') ligne.preparees++;
+      else if (e.statut === 'EXPEDIEE') ligne.expediees++;
+      else ligne.livrees++;
+      if (e.statut !== 'PREPAREE') {
+        for (const l of e.lignes) {
+          ligne.litres += (l.quantiteUnites * l.lotConditionne.format.contenanceMl) / 1000;
+          ligne.lots.set(l.lotConditionne.id, l.lotConditionne.code);
+        }
+        if (e.dateDepart && (!ligne.dernierDepart || e.dateDepart > ligne.dernierDepart)) ligne.dernierDepart = e.dateDepart;
+      }
+      parPays.set(e.paysDestination, ligne);
+    }
+    return [...parPays.values()]
+      .map(({ lots, ...l }) => ({ ...l, litres: Math.round(l.litres * 10) / 10, lots: [...lots].map(([id, code]) => ({ id, code })) }))
+      .sort((a, b) => b.litres - a.litres || a.pays.localeCompare(b.pays));
   }
 
   /** Fiche d'une expédition, avec le contrôle qualité actuel des lots et les totaux de colisage. */
@@ -234,23 +288,6 @@ export class ExpeditionsService {
 
   // --- Dossier export (PDF) --------------------------------------------------------------------
 
-  private exportateur(): Exportateur {
-    const v = (cle: string) => (this.config.get<string>(cle) || null) as string | null;
-    return {
-      raisonSociale: v('EXPORTATEUR_RAISON_SOCIALE') ?? v('PASSEPORT_PRODUCTEUR') ?? 'OLIVED',
-      adresse: v('EXPORTATEUR_ADRESSE'),
-      pays: v('EXPORTATEUR_PAYS') ?? 'Tunisie',
-      matriculeFiscal: v('EXPORTATEUR_MATRICULE_FISCAL'),
-      codeDouane: v('EXPORTATEUR_CODE_DOUANE'),
-      numeroExportateurAgree: v('EXPORTATEUR_AGREE'),
-      telephone: v('EXPORTATEUR_TELEPHONE'),
-      email: v('EXPORTATEUR_EMAIL'),
-      signataire: v('EXPORTATEUR_SIGNATAIRE'),
-      fonction: v('EXPORTATEUR_FONCTION'),
-      lieu: v('EXPORTATEUR_LIEU'),
-    };
-  }
-
   /** Données du dossier export, lues dans la base : analyses, origine (huileries, variétés), colisage. */
   async dossier(id: number): Promise<DossierExport> {
     const expedition = await this.prisma.expedition.findUnique({ where: { id }, include: expeditionInclude });
@@ -303,7 +340,7 @@ export class ExpeditionsService {
     }
 
     return {
-      exportateur: this.exportateur(),
+      exportateur: societe(this.config),
       expedition: {
         ...expedition,
         paysDestinationNom: nomPays(expedition.paysDestination) ?? expedition.paysDestination,

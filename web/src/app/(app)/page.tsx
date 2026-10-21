@@ -178,7 +178,7 @@ export default function TableauDeBordPage() {
                       <span className={`mt-0.5 rounded-full px-2 py-0.5 text-xs ${a.niveau === "ALERTE" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
                         {a.niveau === "ALERTE" ? "Alerte" : "À faire"}
                       </span>
-                      <Link href={`/lots/${a.lotId}`} className="text-stone-800 hover:underline">
+                      <Link href={a.lien ?? `/lots/${a.lotId}`} className="text-stone-800 hover:underline">
                         {a.message}
                       </Link>
                     </li>

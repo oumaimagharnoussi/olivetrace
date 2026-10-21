@@ -4,9 +4,12 @@ import QRCode from 'qrcode';
 import { AuditService } from '../audit/audit.service.js';
 import { BlockchainService } from '../blockchain/blockchain.service.js';
 import type { ParametreAnalyse } from '../generated/prisma/enums.js';
+import { PdfService } from '../pdf/pdf.service.js';
+import { societe } from '../pdf/societe.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { PARAMETRES } from '../qualite/regles.js';
 import { LIBELLES_CATEGORIE, QualiteService } from '../qualite/qualite.service.js';
+import { pageDeclarationLot } from './declaration.js';
 import { PasseportDto } from './passeport.dto.js';
 import { lireBouteille, nettoyerCertifications, nouveauJeton, parametreBouteille, plageEtiquettes, urlPasseport } from './regles.js';
 
@@ -36,7 +39,11 @@ export class PasseportService {
     private readonly audit: AuditService,
     private readonly blockchain: BlockchainService,
     private readonly config: ConfigService,
+    private readonly pdf: PdfService,
   ) {}
+
+  /** Déclarations de conformité déjà imprimées, par jeton : la page publique ne relance pas Chrome à chaque clic. */
+  private readonly declarations = new Map<string, { cle: string; pdf: Buffer; nomFichier: string }>();
 
   private secret() {
     return String(this.config.get('PASSEPORT_SECRET') || this.config.get('JWT_SECRET') || 'olivetrace');
@@ -137,6 +144,11 @@ export class PasseportService {
             format: { select: { nom: true, contenanceMl: true, materiau: true } },
             operation: { select: { date: true } },
             lotVrac: { select: { id: true, categorieVisee: true, statutQualite: true, bloque: true } },
+            // Départs seulement : jamais le client, la commande ni les quantités.
+            lignesExpedition: {
+              where: { expedition: { statut: { in: ['EXPEDIEE', 'LIVREE'] } } },
+              select: { expedition: { select: { dateDepart: true, dateLivraison: true, paysDestination: true, statut: true } } },
+            },
           },
         },
       },
@@ -149,6 +161,9 @@ export class PasseportService {
       passeport.afficherAnalyses ? this.qualite.sourceQualite(this.prisma, lot.lotVracId) : null,
       passeport.afficherAnalyses ? this.qualite.criteresParCategorie(this.prisma) : null,
     ]);
+    const expeditions = lot.lignesExpedition
+      .map(({ expedition: e }) => ({ dateDepart: e.dateDepart, dateLivraison: e.dateLivraison, pays: nomPays(e.paysDestination), codePays: e.paysDestination, livree: e.statut === 'LIVREE' }))
+      .sort((a, b) => (a.dateDepart?.getTime() ?? 0) - (b.dateDepart?.getTime() ?? 0));
     const blockchain = passeport.afficherBlockchain ? await this.preuvesBlockchain(lot.id, ascendance) : null;
     await this.prisma.passeport.update({
       where: { id: passeport.id },
@@ -211,12 +226,77 @@ export class PasseportService {
           }
         : null,
       destination:
-        passeport.afficherDestination && (lot.paysDestination || lot.destination)
-          ? { pays: nomPays(lot.paysDestination), codePays: lot.paysDestination, marche: lot.destination }
+        passeport.afficherDestination && (lot.paysDestination || lot.destination || expeditions.length)
+          ? { pays: nomPays(lot.paysDestination), codePays: lot.paysDestination, marche: lot.destination, expeditions }
           : null,
       certifications,
+      // Téléchargeable si le lot est conforme et ses analyses affichées (voir declarationPdf).
+      declarationConformite: conforme && !!analyse && passeport.afficherAnalyses,
       blockchain,
     };
+  }
+
+  /** Déclaration de conformité UE du lot, en PDF, pour l'importateur qui a scanné le QR code. */
+  async declarationPdf(jeton: string) {
+    const indisponible = new NotFoundException("La déclaration de conformité de ce lot n'est pas disponible.");
+    const passeport = await this.prisma.passeport.findUnique({
+      where: { jeton },
+      include: {
+        lotConditionne: {
+          include: {
+            format: { select: { nom: true } },
+            operation: { select: { date: true } },
+            lotVrac: { select: { id: true, categorieVisee: true, statutQualite: true, bloque: true } },
+          },
+        },
+      },
+    });
+    if (!passeport?.publie || !passeport.afficherAnalyses) throw indisponible;
+    const lot = passeport.lotConditionne;
+    if (lot.lotVrac.statutQualite !== 'CONFORME' || lot.lotVrac.bloque) throw indisponible;
+    const [{ analyse }, criteres, ascendance] = await Promise.all([
+      this.qualite.sourceQualite(this.prisma, lot.lotVracId),
+      this.qualite.criteresParCategorie(this.prisma),
+      this.ascendance(lot.lotVracId),
+    ]);
+    if (!analyse) throw indisponible;
+
+    // Le PDF est refait si l'analyse ou les réglages du passeport ont changé.
+    const cle = `${analyse.id}-${passeport.updatedAt.getTime()}`;
+    const enCache = this.declarations.get(jeton);
+    if (enCache?.cle === cle) return enCache;
+
+    const categorie = lot.lotVrac.categorieVisee;
+    const limites = new Map((criteres[categorie] ?? []).map((c) => [c.parametre, c]));
+    const html = pageDeclarationLot({
+      societe: societe(this.config),
+      code: lot.code,
+      produit: passeport.nomProduit || `Huile d'olive ${LIBELLES_CATEGORIE[categorie]}`,
+      categorie: LIBELLES_CATEGORIE[categorie],
+      format: lot.format.nom,
+      dateConditionnement: lot.operation.date,
+      dluo: lot.dluo,
+      origine: { pays: PAYS_ORIGINE, varietes: ascendance.varietes, campagnes: ascendance.campagnes },
+      analyse: {
+        date: analyse.dateAnalyse,
+        laboratoire: analyse.laboratoire,
+        valeurs: (Object.keys(PARAMETRES) as ParametreAnalyse[])
+          .filter((p) => analyse[PARAMETRES[p].champ] != null)
+          .map((p) => ({
+            libelle: PARAMETRES[p].libelle,
+            unite: PARAMETRES[p].unite,
+            valeur: Number(analyse[PARAMETRES[p].champ]),
+            min: limites.get(p)?.min ?? null,
+            max: limites.get(p)?.max ?? null,
+          })),
+      },
+      genereLe: new Date(),
+    });
+    const pdf = await this.pdf.genererPdf(html, `Déclaration de conformité UE · lot ${lot.code}`);
+    const resultat = { cle, pdf, nomFichier: `declaration-conformite-${lot.code}.pdf` };
+    if (this.declarations.size >= 200) this.declarations.delete(this.declarations.keys().next().value!);
+    this.declarations.set(jeton, resultat);
+    return resultat;
   }
 
   /**

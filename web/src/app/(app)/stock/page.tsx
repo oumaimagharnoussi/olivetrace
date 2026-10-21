@@ -37,7 +37,7 @@ export default function StockPage() {
                 >
                   {a.niveau === "ALERTE" ? "Alerte" : "À faire"}
                 </span>
-                <Link href={`/lots/${a.lotId}`} className="text-stone-800 hover:underline">
+                <Link href={a.lien ?? `/lots/${a.lotId}`} className="text-stone-800 hover:underline">
                   {a.message}
                 </Link>
               </li>

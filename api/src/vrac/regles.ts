@@ -111,7 +111,47 @@ export function controlerAssemblage(lots: LotAssemble[]) {
     );
   }
 
-  return { quantiteKg: total, aciditeEstimee, avertissements };
+  // Mélange d'huiles de qualités différentes, ou assemblage estimé hors extra vierge : risque pour la qualité du lot.
+  const risqueQualite =
+    (nonExtraVierges.length > 0 && nonExtraVierges.length < lots.length) || (aciditeEstimee !== null && aciditeEstimee > ACIDITE_MAX_EXTRA_VIERGE);
+  return { quantiteKg: total, aciditeEstimee, avertissements, risqueQualite };
+}
+
+/** Écart toléré entre le poids annoncé sur le bon de livraison et le poids reçu en cuve (0,5 %). */
+export const TOLERANCE_ECART_RECEPTION = 0.005;
+/** Températures de l'huile à l'arrivée en dehors desquelles une réserve est notée, en °C. */
+export const TEMPERATURE_RECEPTION = { min: 5, max: 30 };
+
+export interface ControleArrivee {
+  quantiteRecueKg: number;
+  quantiteAnnonceeKg: number | null;
+  temperatureC: number | null;
+  citerneConforme: boolean | null;
+  plombsIntacts: boolean | null;
+}
+
+/**
+ * Contrôles du transport à l'arrivée d'une réception : écart entre le poids annoncé et le poids reçu,
+ * température de l'huile, état de la citerne et des plombs. Chaque problème devient une réserve du bon de réception.
+ */
+export function controlerArrivee(c: ControleArrivee) {
+  const reserves: string[] = [];
+  const ecartKg = c.quantiteAnnonceeKg ? c.quantiteRecueKg - c.quantiteAnnonceeKg : null;
+  const tauxEcart = ecartKg !== null && c.quantiteAnnonceeKg ? ecartKg / c.quantiteAnnonceeKg : null;
+  if (tauxEcart !== null && Math.abs(tauxEcart) > TOLERANCE_ECART_RECEPTION) {
+    reserves.push(
+      `${ecartKg! < 0 ? 'Manquant' : 'Excédent'} de ${formatKg(Math.abs(ecartKg!))} par rapport au bon de livraison ` +
+        `(${formatKg(c.quantiteAnnonceeKg!)} annoncés, ${pourcent(Math.round(Math.abs(tauxEcart) * 1000) / 10)} ; tolérance ${pourcent(TOLERANCE_ECART_RECEPTION * 100)}).`,
+    );
+  }
+  if (c.temperatureC !== null && (c.temperatureC < TEMPERATURE_RECEPTION.min || c.temperatureC > TEMPERATURE_RECEPTION.max)) {
+    reserves.push(
+      `Huile reçue à ${c.temperatureC.toLocaleString('fr-FR')} °C, hors de la plage ${TEMPERATURE_RECEPTION.min} à ${TEMPERATURE_RECEPTION.max} °C : risque de dégradation.`,
+    );
+  }
+  if (c.citerneConforme === false) reserves.push('Citerne non conforme (propreté, usage alimentaire ou odeur).');
+  if (c.plombsIntacts === false) reserves.push('Plombs de la citerne absents ou rompus.');
+  return { ecartKg, tauxEcart, reserves };
 }
 
 /** Nombre de jours entiers entre deux dates. */

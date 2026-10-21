@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DENSITE_HUILE_KG_L, kgPourUnites } from '../conditionnement/regles.js';
+import { PAYS_UE } from '../export/regles.js';
 import type { ParametreAnalyse } from '../generated/prisma/enums.js';
+import { nomPays } from '../passeport/passeport.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { QualiteService, valeursAnalyse, versCriteres } from '../qualite/qualite.service.js';
 import { type ChampAnalyse, type Critere, PARAMETRES, controlerExpedition } from '../qualite/regles.js';
@@ -44,7 +46,7 @@ export interface Anomalie {
 
 /**
  * Intelligence artificielle : prévision de la qualité à la réception, évolution des lots en stock,
- * recommandations de lots et de formats pour un client, détection d'anomalies. Lecture seule.
+ * recommandations de lots et de formats pour un client ou un marché, détection d'anomalies. Lecture seule.
  * Les modèles (voir regles.ts) sont recalculés à chaque appel sur tout l'historique : ils apprennent au fil des saisies.
  */
 @Injectable()
@@ -192,16 +194,30 @@ export class IaService {
   // --- Recommandations -------------------------------------------------------------------------
 
   /**
-   * Pour une commande d'un client : lots vrac en stock qui peuvent partir (contrôle qualité et cahier des charges),
-   * classés par marge de qualité et ancienneté ; formats les plus expédiés vers son pays.
+   * Pour une commande d'un client ou un marché : lots vrac en stock qui peuvent partir (contrôle qualité et cahiers des charges
+   * du client, ou de tous les clients du marché), classés par marge de qualité et ancienneté ; formats les plus expédiés
+   * vers ce client, sinon vers ce marché, sinon tous marchés confondus.
    */
-  async recommandations(clientId: number) {
-    const client = await this.prisma.client.findUnique({ where: { id: clientId }, select: { id: true, raisonSociale: true, pays: true } });
-    if (!client) throw new NotFoundException('Client introuvable');
+  async recommandations(cible: { clientId?: number; pays?: string }) {
+    // Un client, ou un marché : un pays (code ISO) ou « UE » pour toute l'Union européenne.
+    const client = cible.clientId
+      ? await this.prisma.client.findUnique({ where: { id: cible.clientId }, select: { id: true, raisonSociale: true, pays: true } })
+      : null;
+    if (cible.clientId && !client) throw new NotFoundException('Client introuvable');
+    const codeMarche = cible.pays?.toUpperCase() ?? null;
+    if (!client && !codeMarche) throw new BadRequestException('Indiquez un client ou un marché (pays ou UE).');
+    const paysMarche = codeMarche === 'UE' ? [...PAYS_UE] : codeMarche ? [codeMarche] : [];
+    const marche = codeMarche
+      ? { code: codeMarche, nom: codeMarche === 'UE' ? 'Union européenne' : (nomPays(codeMarche) ?? codeMarche), ue: codeMarche === 'UE' || PAYS_UE.has(codeMarche) }
+      : null;
     const [stockParLot, criteresParCategorie, cahiers, lignes] = await Promise.all([
       this.stock.stockParLot(this.prisma),
       this.qualite.criteresParCategorie(this.prisma),
-      this.prisma.specification.findMany({ where: { clientId, actif: true }, include: { criteres: true } }),
+      // Pour un marché, les cahiers des charges de tous ses clients actifs : un lot recommandé convient à chacun.
+      this.prisma.specification.findMany({
+        where: { actif: true, ...(client ? { clientId: client.id } : { client: { actif: true, pays: { in: paysMarche } } }) },
+        include: { criteres: true },
+      }),
       this.prisma.expeditionLigne.findMany({
         where: { expedition: { statut: { in: ['EXPEDIEE', 'LIVREE'] } } },
         select: {
@@ -274,14 +290,15 @@ export class IaService {
         .map((f) => ({ ...f, litres: arrondir(f.litres, 1), part: total ? arrondir(f.litres / total, 3) : 0 }))
         .sort((a, b) => b.litres - a.litres);
     };
+    const pays = new Set(client ? [client.pays] : paysMarche);
     const sources = [
-      { base: 'CLIENT' as const, formats: formats((l) => l.expedition.clientId === clientId) },
-      { base: 'PAYS' as const, formats: formats((l) => l.expedition.paysDestination === client.pays) },
+      ...(client ? [{ base: 'CLIENT' as const, formats: formats((l) => l.expedition.clientId === client.id) }] : []),
+      { base: 'PAYS' as const, formats: formats((l) => pays.has(l.expedition.paysDestination)) },
       { base: 'TOUS' as const, formats: formats(() => true) },
     ];
     const choix = sources.find((s) => s.formats.length) ?? { base: 'AUCUN' as const, formats: [] };
 
-    return { client, cahiersDesCharges: cahiers.map((c) => c.nom), lots: candidats, formats: { base: choix.base, liste: choix.formats } };
+    return { client, marche, cahiersDesCharges: cahiers.map((c) => c.nom), lots: candidats, formats: { base: choix.base, liste: choix.formats } };
   }
 
   // --- Anomalies -------------------------------------------------------------------------------

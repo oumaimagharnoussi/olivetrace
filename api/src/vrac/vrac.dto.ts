@@ -1,9 +1,11 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -23,6 +25,51 @@ export class RepartitionDto {
 
   @IsInt() @Min(1)
   quantiteKg: number;
+}
+
+/** Transport sous-traité d'une réception (huilerie → cuves) et contrôles à l'arrivée. */
+export class TransportReceptionDto {
+  @IsString() @MaxLength(160)
+  transporteur: string;
+
+  @IsOptional() @IsString() @MaxLength(32)
+  immatriculation?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  chauffeur?: string;
+
+  @IsOptional() @IsString() @MaxLength(64)
+  numeroBl?: string;
+
+  @IsOptional() @IsString() @MaxLength(255)
+  conditionsLivraison?: string;
+
+  @IsOptional() @IsDateString()
+  dateEnlevement?: string;
+
+  @IsOptional() @IsDateString()
+  dateArrivee?: string;
+
+  @IsOptional() @IsInt() @Min(1)
+  quantiteAnnonceeKg?: number;
+
+  @IsOptional() @IsNumber({ maxDecimalPlaces: 1 })
+  temperatureC?: number;
+
+  @IsOptional() @IsBoolean()
+  citerneConforme?: boolean;
+
+  @IsOptional() @IsBoolean()
+  plombsIntacts?: boolean;
+
+  @IsOptional() @IsString() @MaxLength(64)
+  numeroPlomb?: string;
+
+  @IsOptional() @IsString() @MaxLength(120)
+  receptionnePar?: string;
+
+  @IsOptional() @IsString()
+  observations?: string;
 }
 
 export class ReceptionDto {
@@ -58,6 +105,9 @@ export class ReceptionDto {
 
   @IsOptional() @ValidateNested() @Type(() => AnalyseDto)
   analyse?: AnalyseDto;
+
+  @IsOptional() @ValidateNested() @Type(() => TransportReceptionDto)
+  transport?: TransportReceptionDto;
 }
 
 export class TransfertDto {

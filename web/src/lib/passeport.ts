@@ -62,8 +62,16 @@ export interface PasseportPublic {
     filtrations: { date: string; typeFiltre: string | null; porositeMicrons: number | null }[];
     conditionnement: { date: string; format: string; materiau: string | null };
   } | null;
-  destination: { pays: string | null; codePays: string | null; marche: string | null } | null;
+  destination: {
+    pays: string | null;
+    codePays: string | null;
+    marche: string | null;
+    /** Départs du lot (date et pays), sans le client ni les quantités. */
+    expeditions: { dateDepart: string | null; dateLivraison: string | null; pays: string | null; codePays: string; livree: boolean }[];
+  } | null;
   certifications: string[];
+  /** Déclaration de conformité UE téléchargeable (lot conforme, analyses publiées). */
+  declarationConformite: boolean;
   /** Étapes de fabrication et preuve de leur ancrage sur la blockchain (sans leur contenu). */
   blockchain: {
     etapes: {

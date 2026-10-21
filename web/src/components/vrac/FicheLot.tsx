@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { api } from "@/lib/api";
+import { api, telecharger } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { CATEGORIES, type NonConformite, ROLES_QUALITE, decrireEcart } from "@/lib/qualite";
 import { useApi } from "@/lib/useApi";
 import {
   type Analyse,
+  type ControleArrivee,
   type Livraison,
   type Lot,
   type OrigineLot,
@@ -15,8 +16,10 @@ import {
   MOTIFS_SORTIE,
   ORIGINES_LOT,
   ROLES_ANALYSE,
+  ROLES_STOCK,
   STATUTS_LIVRAISON,
   TYPES_OPERATION,
+  type TransportReception,
   type TypeOperation,
   aujourdhui,
   date,
@@ -26,6 +29,7 @@ import {
 import { BadgeCategorie, BadgeQualite } from "../qualite/Badges";
 import { FormulaireNonConformite, TableauNonConformites } from "../qualite/NonConformites";
 import { ChampsAnalyse, analyseVersApi, analyseVide } from "./ChampsAnalyse";
+import { ChampsTransport, transportDepuisApi, transportVersApi, transportVide } from "./ChampsTransport";
 import { Carte, Erreur, Tableau, td } from "./ui";
 
 interface FicheLotData extends Omit<Lot, "derniereAnalyse"> {
@@ -36,6 +40,8 @@ interface FicheLotData extends Omit<Lot, "derniereAnalyse"> {
   enfants: { quantiteKg: number; lot: { id: number; code: string; origine: OrigineLot; dateReception: string } }[];
   filtration: { id: number; code: string; operateur: string; lotEntree: { id: number; code: string } } | null;
   lotsConditionnes: { id: number; code: string; nombreUnites: number; quantiteKg: number; format: { nom: string } }[];
+  transport: TransportReception | null;
+  controleArrivee: ControleArrivee | null;
   mouvements: {
     id: number;
     quantiteKg: number;
@@ -162,6 +168,8 @@ export function FicheLot({ id }: { id: number }) {
           </div>
         </Carte>
       )}
+
+      {lot.origine === "RECEPTION" && <CarteTransport lot={lot} modifiable={can(ROLES_STOCK)} onEnregistre={recharger} />}
 
       {lot.lotsConditionnes.length > 0 && (
         <Carte titre="Mises en bouteille">
@@ -338,5 +346,117 @@ function FormulaireAnalyse({ lotId, onFin }: { lotId: number; onFin: (resultat: 
         </button>
       </div>
     </form>
+  );
+}
+
+/** Transport sous-traité de la réception, contrôles à l'arrivée et bon de réception numérique (PDF). */
+function CarteTransport({ lot, modifiable, onEnregistre }: { lot: FicheLotData; modifiable: boolean; onEnregistre: () => void }) {
+  const [saisie, setSaisie] = useState(false);
+  const [valeurs, setValeurs] = useState(() => (lot.transport ? transportDepuisApi(lot.transport) : transportVide(lot.dateReception.slice(0, 10))));
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const t = lot.transport;
+  const c = lot.controleArrivee;
+
+  async function enregistrer(e: React.FormEvent) {
+    e.preventDefault();
+    setEnvoi(true);
+    setErreur(null);
+    try {
+      await api(`/lots/${lot.id}/transport`, { method: "PUT", body: transportVersApi(valeurs) });
+      setSaisie(false);
+      onEnregistre();
+    } catch (e) {
+      setErreur((e as Error).message);
+    } finally {
+      setEnvoi(false);
+    }
+  }
+
+  async function bon() {
+    setErreur(null);
+    try {
+      await telecharger(`/lots/${lot.id}/bon-reception`, `${t!.numeroBon}_${lot.code}.pdf`);
+    } catch (e) {
+      setErreur((e as Error).message);
+    }
+  }
+
+  const ouiNon = (v: boolean | null, oui: string, non: string) => (v === null ? "—" : v ? oui : <span className="text-red-700">{non}</span>);
+
+  return (
+    <Carte
+      titre={t ? `Transport et bon de réception ${t.numeroBon}` : "Transport et bon de réception"}
+      actions={
+        <div className="flex gap-2">
+          {t && (
+            <button className="btn-secondary" onClick={bon}>
+              Bon de réception (PDF)
+            </button>
+          )}
+          {modifiable && !saisie && (
+            <button className="btn-secondary" onClick={() => setSaisie(true)}>
+              {t ? "Modifier" : "Saisir le transport"}
+            </button>
+          )}
+        </div>
+      }
+    >
+      {saisie ? (
+        <form onSubmit={enregistrer} className="space-y-4">
+          <ChampsTransport valeurs={valeurs} onChange={setValeurs} />
+          <Erreur message={erreur} />
+          <div className="flex gap-3">
+            <button type="submit" disabled={envoi} className="btn-primary">
+              {envoi ? "Enregistrement…" : "Enregistrer"}
+            </button>
+            <button type="button" className="btn-secondary" onClick={() => setSaisie(false)}>
+              Annuler
+            </button>
+          </div>
+        </form>
+      ) : !t ? (
+        <p className="text-sm text-stone-500">Transport non saisi : saisissez-le pour éditer le bon de réception numérique.</p>
+      ) : (
+        <div className="space-y-3 text-sm">
+          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-3">
+            {(
+              [
+                ["Transporteur", t.transporteur],
+                ["Véhicule / chauffeur", [t.immatriculation, t.chauffeur].filter(Boolean).join(" · ") || "—"],
+                ["Bon de livraison", t.numeroBl ?? "—"],
+                ["Conditions de livraison", t.conditionsLivraison ?? "—"],
+                ["Enlèvement → arrivée", `${date(t.dateEnlevement)} → ${date(t.dateArrivee ?? lot.dateReception)}`],
+                ["Poids annoncé / reçu", `${t.quantiteAnnonceeKg !== null ? kg(t.quantiteAnnonceeKg) : "—"} / ${kg(lot.quantiteInitialeKg)}`],
+                ["Écart", c?.ecartKg != null ? `${kg(c.ecartKg)} (${((c.tauxEcart ?? 0) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %)` : "—"],
+                ["Température", t.temperatureC !== null ? `${nombre(t.temperatureC)} °C` : "—"],
+                ["Citerne", ouiNon(t.citerneConforme, "Conforme", "Non conforme")],
+                ["Plombs", ouiNon(t.plombsIntacts, `Intacts${t.numeroPlomb ? ` (${t.numeroPlomb})` : ""}`, "Absents ou rompus")],
+                ["Réceptionné par", t.receptionnePar ?? "—"],
+                ["Observations", t.observations ?? "—"],
+              ] as [string, React.ReactNode][]
+            ).map(([label, valeur]) => (
+              <div key={label}>
+                <dt className="text-stone-500">{label}</dt>
+                <dd className="text-stone-900">{valeur}</dd>
+              </div>
+            ))}
+          </dl>
+          {c && c.reserves.length > 0 ? (
+            <div className="rounded-md bg-amber-50 px-4 py-3 text-amber-900">
+              Réception avec réserves :
+              <ul className="list-disc pl-5">
+                {c.reserves.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-olive-800">Réception sans réserve.</p>
+          )}
+          <Erreur message={erreur} />
+        </div>
+      )}
+    </Carte>
   );
 }

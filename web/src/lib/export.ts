@@ -42,6 +42,19 @@ export const DOCUMENTS = {
 
 export type TypeDocument = keyof typeof DOCUMENTS;
 
+/** Suivi des expéditions d'un pays de destination (hors annulées). */
+export interface SuiviDestination {
+  pays: string;
+  nomPays: string | null;
+  ue: boolean;
+  preparees: number;
+  expediees: number;
+  livrees: number;
+  litres: number;
+  lots: { id: number; code: string }[];
+  dernierDepart: string | null;
+}
+
 export interface LigneExpedition {
   id: number;
   lotConditionneId: number;

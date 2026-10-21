@@ -86,11 +86,11 @@ export interface DossierExport {
 
 const MODES: Record<string, string> = { MARITIME: 'Maritime', ROUTIER: 'Routier', AERIEN: 'Aérien', FERROVIAIRE: 'Ferroviaire' };
 
-function d(date: Date | null | undefined) {
+export function d(date: Date | null | undefined) {
   return date ? date.toLocaleDateString('fr-FR', { timeZone: 'Africa/Tunis' }) : '—';
 }
 
-function n(valeur: number, decimales = 0) {
+export function n(valeur: number, decimales = 0) {
   return valeur.toLocaleString('fr-FR', { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
 }
 
@@ -99,7 +99,7 @@ function nombre(valeur: number) {
 }
 
 /** Texte ou tiret, échappé. */
-function t(valeur: unknown) {
+export function t(valeur: unknown) {
   return valeur === null || valeur === undefined || valeur === '' ? '—' : html(valeur);
 }
 
@@ -114,7 +114,7 @@ function respecte(v: ValeurAnalyse) {
   return (v.min === null || v.valeur >= v.min) && (v.max === null || v.valeur <= v.max);
 }
 
-const STYLE = `
+export const STYLE = `
   * { box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; font-size: 10.5px; color: #1c1917; margin: 0; }
   .doc { page-break-after: always; }
