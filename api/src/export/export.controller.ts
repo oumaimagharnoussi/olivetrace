@@ -11,9 +11,22 @@ import { DOCUMENTS, type TypeDocument } from './regles.js';
 export class ExpeditionsController {
   constructor(private readonly expeditions: ExpeditionsService) {}
 
+  /** Liste filtrable par statut, lot conditionné, lot vrac, pays de destination ou client. */
   @Get()
-  findAll(@Query('statut', new ParseEnumPipe(StatutExpedition, { optional: true })) statut?: StatutExpedition) {
-    return this.expeditions.findAll(statut);
+  findAll(
+    @Query('statut', new ParseEnumPipe(StatutExpedition, { optional: true })) statut?: StatutExpedition,
+    @Query('lotConditionneId', new ParseIntPipe({ optional: true })) lotConditionneId?: number,
+    @Query('lotVracId', new ParseIntPipe({ optional: true })) lotVracId?: number,
+    @Query('pays') pays?: string,
+    @Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number,
+  ) {
+    return this.expeditions.findAll({ statut, lotConditionneId, lotVracId, pays: pays || undefined, clientId });
+  }
+
+  /** Suivi des expéditions par pays de destination. */
+  @Get('suivi')
+  suivi() {
+    return this.expeditions.suivi();
   }
 
   @Get(':id')

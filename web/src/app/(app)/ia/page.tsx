@@ -14,7 +14,7 @@ import {
   pourcent,
   valeur,
 } from "@/lib/ia";
-import { nomPays } from "@/lib/export";
+import { PAYS_UE, nomPays } from "@/lib/export";
 import { useApi } from "@/lib/useApi";
 import { type Ref, date, kg } from "@/lib/vrac";
 
@@ -162,42 +162,70 @@ function OngletEvolution() {
 
 function OngletRecommandations() {
   const clients = useApi<(Ref & { pays: string; raisonSociale: string })[]>("/clients");
+  const [mode, setMode] = useState<"client" | "marche">("client");
   const [clientId, setClientId] = useState("");
-  const { data, erreur } = useApi<Recommandations>(clientId ? `/ia/recommandations?clientId=${clientId}` : null);
+  const [marche, setMarche] = useState("");
+  const chemin = mode === "client" ? (clientId ? `/ia/recommandations?clientId=${clientId}` : null) : marche ? `/ia/recommandations?pays=${marche}` : null;
+  const { data, erreur } = useApi<Recommandations>(chemin);
+  // Marchés proposés : l'Union européenne, ses pays et les pays des clients.
+  const marches = [...new Set([...PAYS_UE, ...(clients.data?.map((c) => c.pays) ?? [])])].sort((a, b) => nomPays(a).localeCompare(nomPays(b)));
+  const affiche = mode === "client" ? !!clientId && data?.client?.id === Number(clientId) : !!marche && data?.marche?.code === marche;
   const base = {
     CLIENT: "d'après les expéditions déjà faites pour ce client",
-    PAYS: "d'après les expéditions vers ce pays",
+    PAYS: mode === "client" ? "d'après les expéditions vers ce pays" : "d'après les expéditions vers ce marché",
     TOUS: "d'après toutes les expéditions export",
     AUCUN: "",
   };
   return (
     <div className="space-y-4">
       <Explication>
-        Pour une commande, les lots en cuve qui peuvent partir (analysés, conformes, non bloqués, dans le cahier des charges du client) sont classés par
-        score : 60 points pour la marge de qualité, 40 pour l&apos;ancienneté (premier entré, premier sorti). Les formats sont ceux qui partent le plus vers
-        ce client ou son pays.
+        Pour une commande d&apos;un client ou pour un marché, les lots en cuve qui peuvent partir (analysés, conformes, non bloqués, dans le cahier des
+        charges du client, ou de tous les clients du marché) sont classés par score : 60 points pour la marge de qualité, 40 pour l&apos;ancienneté
+        (premier entré, premier sorti). Les formats conseillés sont ceux qui partent le plus vers ce client ou ce marché.
       </Explication>
-      <div className="max-w-sm">
-        <Champ label="Client">
-          <select className="input" value={clientId} onChange={(e) => setClientId(e.target.value)}>
-            <option value="">Choisir…</option>
-            {clients.data?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.raisonSociale} ({nomPays(c.pays)})
-              </option>
-            ))}
+      <div className="flex max-w-xl flex-wrap gap-4">
+        <Champ label="Recommander pour">
+          <select className="input" value={mode} onChange={(e) => setMode(e.target.value as "client" | "marche")}>
+            <option value="client">Un client</option>
+            <option value="marche">Un marché</option>
           </select>
         </Champ>
+        {mode === "client" ? (
+          <Champ label="Client">
+            <select className="input" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">Choisir…</option>
+              {clients.data?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.raisonSociale} ({nomPays(c.pays)})
+                </option>
+              ))}
+            </select>
+          </Champ>
+        ) : (
+          <Champ label="Marché">
+            <select className="input" value={marche} onChange={(e) => setMarche(e.target.value)}>
+              <option value="">Choisir…</option>
+              <option value="UE">Union européenne (tous pays)</option>
+              {marches.map((p) => (
+                <option key={p} value={p}>
+                  {nomPays(p)}
+                </option>
+              ))}
+            </select>
+          </Champ>
+        )}
       </div>
       <Erreur message={erreur} />
-      {clientId && data && data.client.id === Number(clientId) && (
+      {affiche && data && (
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">
             <Carte
               titre="Lots recommandés"
               actions={
                 <span className="text-xs text-stone-500">
-                  {data.cahiersDesCharges.length ? `Cahier des charges : ${data.cahiersDesCharges.join(", ")}` : "Pas de cahier des charges pour ce client"}
+                  {data.cahiersDesCharges.length
+                    ? `Cahier${data.cahiersDesCharges.length > 1 ? "s" : ""} des charges : ${data.cahiersDesCharges.join(", ")}`
+                    : `Pas de cahier des charges pour ce ${mode === "client" ? "client" : "marché"}`}
                 </span>
               }
             >

@@ -28,10 +28,10 @@ export class IaController {
     return this.ia.evolution();
   }
 
-  /** Lots et formats recommandés pour une commande d'un client. */
+  /** Lots et formats recommandés pour un client (?clientId=) ou un marché (?pays=FR, ou ?pays=UE). */
   @Get('recommandations')
-  recommandations(@Query('clientId', ParseIntPipe) clientId: number) {
-    return this.ia.recommandations(clientId);
+  recommandations(@Query('clientId', new ParseIntPipe({ optional: true })) clientId?: number, @Query('pays') pays?: string) {
+    return this.ia.recommandations({ clientId, pays: pays || undefined });
   }
 
   /** Anomalies des `jours` derniers jours (90 par défaut). */

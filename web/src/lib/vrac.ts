@@ -75,6 +75,34 @@ export interface Alerte {
   lotId: number;
   lotCode: string;
   message: string;
+  /** Page à ouvrir, si ce n'est pas la fiche du lot vrac (ex. un lot conditionné). */
+  lien?: string;
+}
+
+/** Transport sous-traité d'une réception et son bon de réception numérique. */
+export interface TransportReception {
+  id: number;
+  numeroBon: string;
+  transporteur: string;
+  immatriculation: string | null;
+  chauffeur: string | null;
+  numeroBl: string | null;
+  conditionsLivraison: string | null;
+  dateEnlevement: string | null;
+  dateArrivee: string | null;
+  quantiteAnnonceeKg: number | null;
+  temperatureC: string | null;
+  citerneConforme: boolean | null;
+  plombsIntacts: boolean | null;
+  numeroPlomb: string | null;
+  receptionnePar: string | null;
+  observations: string | null;
+}
+
+export interface ControleArrivee {
+  ecartKg: number | null;
+  tauxEcart: number | null;
+  reserves: string[];
 }
 
 export interface Livraison {

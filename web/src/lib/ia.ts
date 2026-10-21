@@ -41,7 +41,9 @@ export interface Evolution {
 }
 
 export interface Recommandations {
-  client: { id: number; raisonSociale: string; pays: string };
+  client: { id: number; raisonSociale: string; pays: string } | null;
+  /** Marché demandé : un pays, ou « UE » pour toute l'Union européenne. */
+  marche: { code: string; nom: string; ue: boolean } | null;
   cahiersDesCharges: string[];
   lots: {
     lot: { id: number; code: string; variete: string | null; huilerie: string | null };

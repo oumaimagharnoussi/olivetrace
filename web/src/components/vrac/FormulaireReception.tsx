@@ -7,6 +7,7 @@ import { useApi } from "@/lib/useApi";
 import { type Cuve, type Ref, aujourdhui, campagneEnCours, kg } from "@/lib/vrac";
 import { PrevisionQualite } from "@/components/ia/PrevisionQualite";
 import { ChampsAnalyse, analyseVersApi, analyseVide } from "./ChampsAnalyse";
+import { ChampsTransport, transportVersApi, transportVide } from "./ChampsTransport";
 import { Champ, Erreur } from "./ui";
 
 /** Réception d'huile d'une huilerie : nouveau lot réparti dans une ou plusieurs cuves vides. */
@@ -28,6 +29,8 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
   const [repartition, setRepartition] = useState([{ stockageId: "", quantiteKg: "" }]);
   const [avecAnalyse, setAvecAnalyse] = useState(false);
   const [analyse, setAnalyse] = useState(() => analyseVide(aujourdhui()));
+  const [avecTransport, setAvecTransport] = useState(true);
+  const [transport, setTransport] = useState(() => transportVide(aujourdhui()));
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
 
@@ -51,12 +54,13 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
           categorieVisee: lot.categorieVisee,
           repartition: repartition.map((r) => ({ stockageId: Number(r.stockageId), quantiteKg: Number(r.quantiteKg) })),
           analyse: avecAnalyse ? analyseVersApi(analyse) : undefined,
+          transport: avecTransport ? transportVersApi(transport) : undefined,
         },
       });
       onEnregistre(
         res.nonConformite
           ? `Lot ${res.code} reçu mais bloqué : ${res.nonConformite.description} (non-conformité ${res.nonConformite.code}).`
-          : `Lot ${res.code} enregistré.`,
+          : `Lot ${res.code} enregistré.${avecTransport ? " Le bon de réception est disponible sur la fiche du lot." : ""}`,
       );
     } catch (e) {
       setErreur((e as Error).message);
@@ -98,7 +102,7 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
         <Champ label="Campagne">
           <input className="input" placeholder="2026/2027" value={lot.campagne} onChange={maj("campagne")} />
         </Champ>
-        <Champ label="N° de bon de réception">
+        <Champ label="N° de bon (huilerie)">
           <input className="input" value={lot.numeroBon} onChange={maj("numeroBon")} />
         </Champ>
         <Champ label="Code du lot">
@@ -160,6 +164,24 @@ export function FormulaireReception({ onAnnuler, onEnregistre }: { onAnnuler: ()
         >
           + Ajouter une cuve
         </button>
+      </div>
+
+      <div className="space-y-3">
+        <label className="flex items-center gap-2 text-sm text-stone-700">
+          <input type="checkbox" checked={avecTransport} onChange={(e) => setAvecTransport(e.target.checked)} />
+          Transport sous-traité et contrôles à l&apos;arrivée (bon de réception numérique)
+        </label>
+        {avecTransport && (
+          <>
+            <ChampsTransport valeurs={transport} onChange={setTransport} />
+            {transport.quantiteAnnonceeKg && total > 0 && Number(transport.quantiteAnnonceeKg) !== total && (
+              <p className="text-sm text-amber-800">
+                Écart avec le bon de livraison : {kg(total - Number(transport.quantiteAnnonceeKg))} (
+                {(((total - Number(transport.quantiteAnnonceeKg)) / Number(transport.quantiteAnnonceeKg)) * 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %).
+              </p>
+            )}
+          </>
+        )}
       </div>
 
       <div className="space-y-3">

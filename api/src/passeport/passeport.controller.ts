@@ -67,6 +67,13 @@ export class PasseportPublicController {
   constructor(private readonly passeports: PasseportService) {}
 
   @Public()
+  @Get(':jeton/declaration-conformite.pdf')
+  async declaration(@Param('jeton') jeton: string) {
+    const { pdf, nomFichier } = await this.passeports.declarationPdf(jeton);
+    return new StreamableFile(pdf, { type: 'application/pdf', disposition: `inline; filename="${nomFichier}"` });
+  }
+
+  @Public()
   @Get(':jeton')
   consulter(@Param('jeton') jeton: string, @Query('b') b?: string) {
     return this.passeports.public(jeton, b);

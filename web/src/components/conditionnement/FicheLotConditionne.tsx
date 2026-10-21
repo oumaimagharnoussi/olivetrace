@@ -7,6 +7,7 @@ import { type LotConditionne, type MouvementProduit, ROLES_PRODUITS_FINIS, litre
 import { CATEGORIES } from "@/lib/qualite";
 import { useApi } from "@/lib/useApi";
 import { ORIGINES_LOT, type OrigineLot, date, kg } from "@/lib/vrac";
+import { ExpeditionsDuLot } from "../export/ExpeditionsDuLot";
 import { BadgeQualite } from "../qualite/Badges";
 import { Carte, Erreur, Succes, Tableau, td } from "../vrac/ui";
 import { FormulaireMouvementProduit } from "./Formulaires";
@@ -108,6 +109,8 @@ export function FicheLotConditionne({ id }: { id: number }) {
       </Carte>
 
       <CartePasseport lotId={lot.id} />
+
+      <ExpeditionsDuLot lotConditionneId={lot.id} />
 
       <Carte titre="Traçabilité : lots vrac d'origine">
         <Tableau entetes={["Lot", "Étape", "Huilerie", "Variété", "Campagne"]} vide={lot.ascendance.length === 0}>

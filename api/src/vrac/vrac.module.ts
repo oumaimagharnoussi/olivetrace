@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { PdfModule } from '../pdf/pdf.module.js';
 import { QualiteModule } from '../qualite/qualite.module.js';
 import { LivraisonsService } from './livraisons.service.js';
 import { LotsService } from './lots.service.js';
@@ -8,7 +9,7 @@ import { LivraisonsController, LotsController, OperationsController, StockContro
 
 /** Flux 1 : stockage et vente en vrac. */
 @Module({
-  imports: [QualiteModule],
+  imports: [QualiteModule, PdfModule],
   controllers: [StockController, LotsController, OperationsController, LivraisonsController],
   providers: [StockService, LotsService, OperationsService, LivraisonsService],
   exports: [StockService],

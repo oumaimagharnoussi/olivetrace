@@ -8,6 +8,7 @@
 // Étape 7 (tableau de bord et rapports) : pas de nouvelle table, tout est calculé à partir des données existantes.
 // Étape 8 (intelligence artificielle) : pas de nouvelle table, les modèles sont recalculés sur l'historique (api/src/ia).
 // Étape 9 (blockchain, en option) : scellement du journal d'audit et ancrage de son empreinte sur une blockchain publique.
+// Compléments de la proposition TNTrace : transport sous-traité à la réception et bon de réception numérique.
 
 generator client {
   provider     = "prisma-client"
@@ -215,6 +216,7 @@ model Lot {
   filtrations      Filtration[]     @relation("FiltrationEntree") // filtrations faites à partir de ce lot
   filtration       Filtration?      @relation("FiltrationSortie") // pour un lot filtré : la filtration qui l'a produit
   lotsConditionnes LotConditionne[]
+  transport        TransportReception? // transport de l'huilerie jusqu'aux cuves (lots reçus seulement)
 
   @@index([dateReception])
 }
@@ -315,6 +317,31 @@ model Livraison {
   updatedAt           DateTime        @updatedAt
 
   @@index([statut])
+}
+
+// Transport sous-traité d'une réception, de l'huilerie jusqu'aux cuves, et son bon de réception numérique (PDF).
+// Les contrôles à l'arrivée (écart de poids, température, citerne, plombs) donnent les réserves du bon.
+model TransportReception {
+  id                  Int       @id @default(autoincrement())
+  numeroBon           String    @unique @db.VarChar(32) // n° du bon de réception, ex. BR2026-0001
+  lotId               Int       @unique
+  lot                 Lot       @relation(fields: [lotId], references: [id])
+  transporteur        String    @db.VarChar(160) // prestataire
+  immatriculation     String?   @db.VarChar(32)
+  chauffeur           String?   @db.VarChar(120)
+  numeroBl            String?   @db.VarChar(64) // bon de livraison de l'huilerie ou du transporteur
+  conditionsLivraison String?   @db.VarChar(255) // ex. franco cuves OLIVED, transport à la charge de l'huilerie
+  dateEnlevement      DateTime?
+  dateArrivee         DateTime?
+  quantiteAnnonceeKg  Int? // poids indiqué sur le bon de livraison, comparé au poids reçu en cuve
+  temperatureC        Decimal?  @db.Decimal(4, 1) // température de l'huile à l'arrivée
+  citerneConforme     Boolean? // citerne propre, à usage alimentaire, sans odeur
+  plombsIntacts       Boolean?
+  numeroPlomb         String?   @db.VarChar(64)
+  receptionnePar      String?   @db.VarChar(120)
+  observations        String?   @db.Text
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 // ---------------------------------------------------------------------------

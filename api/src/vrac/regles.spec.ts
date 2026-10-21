@@ -1,4 +1,4 @@
-import { controlerAssemblage, verifierMouvements } from './regles.js';
+import { controlerArrivee, controlerAssemblage, verifierMouvements } from './regles.js';
 
 const cuve = (id: number, capaciteKg = 24000, actif = true) => ({ id, code: `CS-0${id}`, capaciteKg, actif });
 const code = (id: number) => `L${id}`;
@@ -72,5 +72,42 @@ describe('controlerAssemblage', () => {
     expect(r.aciditeEstimee).toBe(1);
     expect(r.avertissements.join(' ')).toContain("Mélange d'huile extra vierge");
     expect(r.avertissements.join(' ')).toContain('ne serait pas extra vierge');
+  });
+});
+
+describe('controlerAssemblage : risque qualité', () => {
+  const lot = (code: string, acidite: number | null) => ({ code, quantiteKg: 1000, variete: 'Chemlali', campagne: '2026/2027', acidite });
+
+  it("signale le mélange d'une huile extra vierge avec une huile plus acide", () => {
+    expect(controlerAssemblage([lot('A', 0.3), lot('B', 1.2)]).risqueQualite).toBe(true);
+  });
+
+  it("ne signale rien pour deux huiles extra vierges", () => {
+    expect(controlerAssemblage([lot('A', 0.3), lot('B', 0.5)]).risqueQualite).toBe(false);
+  });
+});
+
+describe('controlerArrivee', () => {
+  const arrivee = { quantiteRecueKg: 20000, quantiteAnnonceeKg: 20000, temperatureC: 18, citerneConforme: true, plombsIntacts: true };
+
+  it("n'émet aucune réserve pour une livraison conforme", () => {
+    expect(controlerArrivee(arrivee)).toEqual({ ecartKg: 0, tauxEcart: 0, reserves: [] });
+  });
+
+  it("tolère un petit écart de poids mais signale un manquant au-delà de 0,5 %", () => {
+    expect(controlerArrivee({ ...arrivee, quantiteRecueKg: 19950 }).reserves).toEqual([]);
+    const { ecartKg, reserves } = controlerArrivee({ ...arrivee, quantiteRecueKg: 19800 });
+    expect(ecartKg).toBe(-200);
+    expect(reserves[0]).toContain('Manquant');
+  });
+
+  it('signale la température, la citerne et les plombs', () => {
+    const { reserves } = controlerArrivee({ ...arrivee, temperatureC: 34, citerneConforme: false, plombsIntacts: false });
+    expect(reserves).toHaveLength(3);
+  });
+
+  it('ne contrôle pas ce qui n\'est pas renseigné', () => {
+    const r = controlerArrivee({ quantiteRecueKg: 1000, quantiteAnnonceeKg: null, temperatureC: null, citerneConforme: null, plombsIntacts: null });
+    expect(r).toEqual({ ecartKg: null, tauxEcart: null, reserves: [] });
   });
 });
